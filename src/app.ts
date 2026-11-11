@@ -3,6 +3,7 @@ import { GameManager } from './game/gameManager';
 import { loadGame, loadSettings, saveSettings, DEFAULT_SETTINGS, type Settings } from './game/storage';
 import type { BoardView } from './scene/view';
 import { View2D } from './scene/view2d';
+import { Scene3D } from './scene/view3d/scene3d';
 import { ThemeRegistry } from './themes/registry';
 import { GameScreen, type ViewKind } from './ui/gameScreen';
 import { detectLang, setLang, t } from './ui/i18n';
@@ -18,6 +19,7 @@ export class App {
   private gm!: GameManager;
   private aiAvailable = false;
   private screen: GameScreen | null = null;
+  private can3d = false;
 
   constructor(private host: HTMLElement) {}
 
@@ -25,6 +27,7 @@ export class App {
     this.settings = loadSettings({ ...DEFAULT_SETTINGS, language: detectLang() });
     setLang(this.settings.language);
     document.title = t('app.title');
+    this.can3d = Scene3D.isSupported();
 
     const loading = document.createElement('div');
     loading.className = 'loading';
@@ -71,16 +74,20 @@ export class App {
     this.screen = new GameScreen(this.host, {
       gm: this.gm,
       createView: (kind) => this.createView(kind),
-      initialView: '2d',
-      can3d: false,
+      initialView: this.can3d ? this.settings.view : '2d',
+      can3d: this.can3d,
       onExit: () => void this.showMenu(),
       onSettings: () => {},
       onViewChange: (kind) => this.updateSettings({ ...this.settings, view: kind }),
     });
   }
 
-  private createView(_kind: ViewKind): BoardView {
-    return new View2D(this.registry.get('masa', this.settings.themes.masa));
+  private createView(kind: ViewKind): BoardView {
+    const themes = this.registry.resolve(this.settings.themes);
+    if (kind === '3d' && this.can3d) {
+      return new Scene3D(themes, this.settings.quality);
+    }
+    return new View2D(themes.masa);
   }
 
   private updateSettings(next: Settings): void {
