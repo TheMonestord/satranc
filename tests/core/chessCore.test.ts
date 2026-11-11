@@ -135,6 +135,15 @@ describe('ChessCore', () => {
     expect(core.legalTargets('e4')).toEqual([]);
   });
 
+  test('bütün geçerli hamleler', () => {
+    const core = new ChessCore();
+    const all = core.allLegalMoves();
+    expect(all).toHaveLength(20);
+    expect(all).toContainEqual({ from: 'g1', to: 'f3' });
+    const promo = new ChessCore('8/P7/8/8/8/8/8/k6K w - - 0 1').allLegalMoves();
+    expect(promo).toContainEqual({ from: 'a7', to: 'a8', promotion: 'q' });
+  });
+
   test('taş listesi', () => {
     const core = new ChessCore();
     const pieces = core.pieces();

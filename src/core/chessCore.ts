@@ -28,6 +28,14 @@ export class ChessCore {
     }
   }
 
+  allLegalMoves(): MoveRequest[] {
+    return this.chess.moves({ verbose: true }).map((m) => {
+      const req: MoveRequest = { from: m.from, to: m.to };
+      if (m.promotion) req.promotion = m.promotion;
+      return req;
+    });
+  }
+
   move(req: MoveRequest): MoveEvent | null {
     let m: Move;
     try {
