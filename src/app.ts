@@ -4,6 +4,7 @@ import { loadGame, loadSettings, saveSettings, DEFAULT_SETTINGS, type Settings }
 import type { BoardView } from './scene/view';
 import { View2D } from './scene/view2d';
 import { Scene3D } from './scene/view3d/scene3d';
+import { HandAnimator } from './scene/animators/handAnimator';
 import { ThemeRegistry } from './themes/registry';
 import { GameScreen, type ViewKind } from './ui/gameScreen';
 import { detectLang, setLang, t } from './ui/i18n';
@@ -11,6 +12,7 @@ import { showMenu } from './ui/menu';
 
 const THEME_BASE = 'temalar/';
 const ENGINE_URL = 'engine/stockfish.js';
+const ANIMATION_SPEED: Record<Settings['animation'], number> = { normal: 1, fast: 3, off: 0 };
 
 /** Uygulamanın tamamını kurar: ayarlar, temalar, rakip, menü ve oyun ekranı arasındaki geçişler. */
 export class App {
@@ -85,7 +87,10 @@ export class App {
   private createView(kind: ViewKind): BoardView {
     const themes = this.registry.resolve(this.settings.themes);
     if (kind === '3d' && this.can3d) {
-      return new Scene3D(themes, this.settings.quality);
+      const scene = new Scene3D(themes, this.settings.quality);
+      scene.setAnimator(new HandAnimator(scene, themes.eller));
+      scene.setAnimationSpeed(ANIMATION_SPEED[this.settings.animation]);
+      return scene;
     }
     return new View2D(themes.masa);
   }

@@ -119,6 +119,12 @@ export class Scene3D implements BoardView, MoveAnimatorHost {
   }
 
   setPosition(pieces: PieceOnBoard[]): void {
+    // Dışarıdan gelen konum (geri alma, yeni oyun) bekleyen hamle canlandırmasının sonucunu geçersiz kılar.
+    this.moveToken++;
+    this.syncPosition(pieces);
+  }
+
+  private syncPosition(pieces: PieceOnBoard[]): void {
     this.animator?.finishNow();
     const wanted = new Map(pieces.map((p) => [p.square, p]));
     for (const [sq, obj] of [...this.pieces]) {
@@ -141,11 +147,11 @@ export class Scene3D implements BoardView, MoveAnimatorHost {
   async applyMove(ev: MoveEvent, piecesAfter: PieceOnBoard[]): Promise<void> {
     this.animator?.finishNow();
     const token = ++this.moveToken;
-    if (this.animator && this.speed > 0 && this.renderer) {
+    if (this.animator && this.speed > 0) {
       await this.animator.play(ev, this.speed);
     }
-    // Bu sırada daha yeni bir hamle geldiyse konumu o belirler.
-    if (token === this.moveToken && !this.disposed) this.setPosition(piecesAfter);
+    // Bu sırada daha yeni bir hamle veya konum geldiyse tahtayı o belirler.
+    if (token === this.moveToken && !this.disposed) this.syncPosition(piecesAfter);
   }
 
   setHighlights(h: Highlights): void {

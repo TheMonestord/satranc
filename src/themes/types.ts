@@ -36,6 +36,8 @@ export interface TaslarTheme extends ThemeBase {
 export interface EllerTheme extends ThemeBase {
   tur: 'eller';
   renk: string;
+  /** İsteğe bağlı kol (giysi) rengi */
+  kolRengi?: string;
 }
 
 export type Theme = OrtamTheme | MasaTheme | TaslarTheme | EllerTheme;

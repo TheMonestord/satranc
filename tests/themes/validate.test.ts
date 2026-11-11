@@ -24,6 +24,14 @@ describe('validateManifest', () => {
     expect(r.ok && r.theme.model).toBe('masa.glb');
   });
 
+  test('eller: kolRengi isteğe bağlıdır, verilirse renk olmalıdır', () => {
+    const ok = validateManifest({ ...valid.eller, kolRengi: '#223344' }, 'b/');
+    expect(ok.ok && ok.theme.tur === 'eller' && ok.theme.kolRengi).toBe('#223344');
+    const none = validateManifest(valid.eller, 'b/');
+    expect(none.ok && none.theme.tur === 'eller' && none.theme.kolRengi).toBeUndefined();
+    expect(validateManifest({ ...valid.eller, kolRengi: 'mavi' }, 'b/').ok).toBe(false);
+  });
+
   test('tur eksikse reddedilir', () => {
     const { tur: _tur, ...rest } = valid.masa;
     expect(validateManifest(rest, 'b/').ok).toBe(false);

@@ -51,6 +51,12 @@ export function validateManifest(json: unknown, baseUrl: string): Result {
     }
     out[field] = v;
   }
+  if (tur === 'eller' && j.kolRengi !== undefined) {
+    if (typeof j.kolRengi !== 'string' || !COLOR.test(j.kolRengi)) {
+      return { ok: false, error: 'kolRengi: #rrggbb biçiminde bir renk olmalı' };
+    }
+    out.kolRengi = j.kolRengi.toLowerCase();
+  }
   if (j.model !== undefined) {
     if (typeof j.model !== 'string' || !/^[\w.-]+\.(glb|gltf)$/.test(j.model)) {
       return { ok: false, error: 'model: tema klasöründeki bir .glb veya .gltf dosyasının adı olmalı' };
