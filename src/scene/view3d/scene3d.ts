@@ -450,6 +450,18 @@ export class Scene3D implements BoardView, MoveAnimatorHost {
     if (sq) this.clickCb(sq);
   };
 
+  /**
+   * Karenin merkezinin, tahtadan `height` kadar yukarıdaki noktasının ekrandaki konumu (CSS pikseli);
+   * görünüm monte değilse null. Uçtan uca testler kullanır.
+   */
+  squareToClient(sq: Square, height = 0): { x: number; y: number } | null {
+    if (!this.renderer) return null;
+    const rect = this.renderer.domElement.getBoundingClientRect();
+    this.camera.updateMatrixWorld();
+    const p = squareToWorld(sq).setY(height).project(this.camera);
+    return { x: rect.left + ((p.x + 1) / 2) * rect.width, y: rect.top + ((1 - p.y) / 2) * rect.height };
+  }
+
   private pickSquare(clientX: number, clientY: number): Square | null {
     const rect = this.renderer!.domElement.getBoundingClientRect();
     const ndc = new THREE.Vector2(

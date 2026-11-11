@@ -26,6 +26,9 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
+      # Uçtan uca testler bilgi amaçlıdır; sanal ekran kartı kaynaklı bir takılma yayını engellemez.
+      - run: npm run e2e
+        continue-on-error: true
       - uses: actions/configure-pages@v5
         with:
           enablement: true

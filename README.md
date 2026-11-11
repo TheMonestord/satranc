@@ -2,6 +2,8 @@
 
 Tarayıcıda çalışan, sunucusuz, 3D satranç oyunu. Bilgisayara karşı veya aynı cihazda iki kişi oynanır.
 
+**Oyna:** https://themonestord.github.io/satranc/
+
 ## Çalıştırma
 
 ```bash
@@ -9,6 +11,7 @@ npm install
 npm run dev      # geliştirme
 npm test         # testler
 npm run build    # yayın çıktısı: dist/
+npm run e2e      # tarayıcıda uçtan uca testler (Chrome gerekir)
 ```
 
 ## Lisans ve teşekkür

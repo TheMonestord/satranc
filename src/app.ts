@@ -31,6 +31,11 @@ export class App {
   constructor(private host: HTMLElement) {}
 
   async run(): Promise<void> {
+    // Uçtan uca testlerin 3D tahtada kare konumu bulabilmesi için.
+    (globalThis as { __satranc?: unknown }).__satranc = {
+      squareToClient: (sq: string, height = 0) =>
+        this.view instanceof Scene3D ? this.view.squareToClient(sq, height) : null,
+    };
     this.settings = loadSettings({ ...DEFAULT_SETTINGS, language: detectLang() });
     setLang(this.settings.language);
     document.title = t('app.title');
