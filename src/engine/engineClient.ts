@@ -13,6 +13,8 @@ const INIT_TIMEOUT_MS = 10_000;
 export class EngineClient {
   private pending: { resolve: (m: MoveRequest) => void; reject: (e: Error) => void } | null = null;
   private onReady: (() => void) | null = null;
+  /** Yarıda kesilen aramalardan beklenen, yok sayılacak `bestmove` satırı sayısı. */
+  private staleReplies = 0;
 
   constructor(private transport: EngineTransport) {
     transport.onLine((line) => this.handleLine(line));
@@ -52,6 +54,8 @@ export class EngineClient {
     if (this.pending) {
       this.pending.reject(new Error('Yeni hamle istendi'));
       this.pending = null;
+      // Motor "stop" komutuna eski konumun hamlesiyle cevap verir; o cevap yeni isteğe verilmemeli.
+      this.staleReplies += 1;
       this.transport.post('stop');
     }
     return new Promise<MoveRequest>((resolve, reject) => {
@@ -75,7 +79,12 @@ export class EngineClient {
       this.onReady?.();
       return;
     }
-    if (!line.startsWith('bestmove') || !this.pending) return;
+    if (!line.startsWith('bestmove')) return;
+    if (this.staleReplies > 0) {
+      this.staleReplies -= 1;
+      return;
+    }
+    if (!this.pending) return;
     const { resolve, reject } = this.pending;
     this.pending = null;
     const match = /^bestmove ([a-h][1-8])([a-h][1-8])([qrbn])?/.exec(line);

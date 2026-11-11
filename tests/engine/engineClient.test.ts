@@ -87,4 +87,28 @@ describe('EngineClient', () => {
     client.dispose();
     expect(f.transport.terminate).toHaveBeenCalled();
   });
+
+  test('yarıda kesilen aramanın gecikmiş cevabı yeni isteğe verilmez', async () => {
+    const f = fakeTransport();
+    const client = new EngineClient(f.transport);
+    const init = client.init();
+    f.emit('uciok');
+    await init;
+
+    const first = client.bestMove('fen-a', LEVELS.master);
+    first.catch(() => {});
+    let settled: unknown = null;
+    const second = client.bestMove('fen-b', LEVELS.master);
+    void second.then((m) => (settled = m));
+    expect(f.sent).toContain('stop');
+
+    // Motor "stop" komutuna eski konumun hamlesiyle cevap verir; bu yeni isteğe ait değildir.
+    f.emit('bestmove e2e4 ponder e7e5');
+    await Promise.resolve();
+    expect(settled).toBeNull();
+
+    f.emit('bestmove d7d5');
+    await expect(second).resolves.toEqual({ from: 'd7', to: 'd5' });
+    await expect(first).rejects.toThrow();
+  });
 });

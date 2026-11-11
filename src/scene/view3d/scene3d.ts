@@ -443,9 +443,13 @@ export class Scene3D implements BoardView, MoveAnimatorHost {
   private onPointerUp = (e: PointerEvent): void => {
     const down = this.pointerDown;
     this.pointerDown = null;
-    if (!down || !this.renderer) return;
+    if (!down) return;
     // Sürükleme kamerayı döndürür; yalnızca yerinde bırakılan dokunuş tıklama sayılır.
     if (Math.hypot(e.clientX - down.x, e.clientY - down.y) > CLICK_SLOP_PX) return;
+    // Süren canlandırma önce tamamlanır: taş kayıtları güncellenmeden seçim yapılırsa
+    // havadaki taşa tıklamak eski karesini seçer.
+    this.animator?.finishNow();
+    if (!this.renderer) return;
     const sq = this.pickSquare(e.clientX, e.clientY);
     if (sq) this.clickCb(sq);
   };
