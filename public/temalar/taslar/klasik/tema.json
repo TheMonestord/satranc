@@ -1,0 +1,8 @@
+{
+  "id": "klasik",
+  "tur": "taslar",
+  "ad": { "tr": "Klasik Taşlar", "en": "Classic Pieces" },
+  "beyaz": "#f2e9d8",
+  "siyah": "#2a2420",
+  "parlaklik": 0.45
+}

@@ -1,0 +1,9 @@
+{
+  "id": "klasik-oda",
+  "tur": "ortam",
+  "ad": { "tr": "Klasik Oda", "en": "Classic Room" },
+  "arkaPlan": "#1b1a22",
+  "zemin": "#2b2622",
+  "isikRengi": "#fff1d6",
+  "isikSiddeti": 2.2
+}
