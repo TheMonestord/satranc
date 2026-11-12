@@ -55,6 +55,9 @@ export class GameScreen {
 
     deps.gm.on('move', (ev) => this.onMove(ev));
     deps.gm.on('state', (s) => this.onState(s));
+    deps.gm.on('clock', (c) => {
+      if (!this.disposed) this.hud.updateClock(c);
+    });
     this.onState(state);
   }
 
@@ -187,6 +190,8 @@ export class GameScreen {
         this.deps.onSettings();
         break;
       case 'menu':
+        // Saatli oyunda çıkarken saat durur ve kalan süre saklanır.
+        gm.suspend();
         this.deps.onExit();
         break;
     }

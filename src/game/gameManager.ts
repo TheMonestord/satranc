@@ -2,7 +2,8 @@ import { ChessCore } from '../core/chessCore';
 import type { Color, GameResult, MoveEvent, MoveRequest, PieceOnBoard, Square } from '../core/types';
 import { opposite } from '../core/types';
 import { LEVELS, pickMove, type LevelConfig, type LevelId } from '../engine/levels';
-import { clearGame, loadGame, saveGame } from './storage';
+import { ChessClock, type ClockConfig, type ClockSnapshot } from './clock';
+import { addHistory, clearGame, loadGame, saveGame } from './storage';
 
 export interface Opponent {
   bestMove(fen: string, cfg: LevelConfig): Promise<MoveRequest>;
@@ -12,6 +13,8 @@ export interface GameConfig {
   mode: 'ai' | 'local';
   level: LevelId;
   playerColor: Color;
+  /** Satranç saati; yoksa oyun süresizdir. */
+  clock?: ClockConfig | null;
 }
 
 export interface GameState {
@@ -23,7 +26,12 @@ export interface GameState {
   thinking: boolean;
   /** Rakip hamle üretemedi; oyun bu hâliyle sürdürülemez. */
   opponentFailed: boolean;
+  /** Saatli oyunda kalan süreler; süresiz oyunda null. */
+  clock: ClockSnapshot | null;
 }
+
+type ClockListener = (c: ClockSnapshot) => void;
+const CLOCK_TICK_MS = 100;
 
 type MoveListener = (ev: MoveEvent) => void;
 type StateListener = (s: GameState) => void;
@@ -41,6 +49,13 @@ export class GameManager {
   private generation = 0;
   private moveListeners: MoveListener[] = [];
   private stateListeners: StateListener[] = [];
+  private clockListeners: ClockListener[] = [];
+  private clock: ChessClock | null = null;
+  private clockTimer: ReturnType<typeof setInterval> | null = null;
+  private flagged: Color | null = null;
+  /** Süren oyun geçmişe yazıldı mı (aynı oyun iki kez yazılmasın). */
+  private archived = false;
+  private now: () => number;
   private opponent: Opponent | null;
   private rng: () => number;
   private delay: (ms: number) => Promise<void>;
@@ -49,7 +64,9 @@ export class GameManager {
     opponent: Opponent | null;
     rng?: () => number;
     delay?: (ms: number) => Promise<void>;
+    now?: () => number;
   }) {
+    this.now = deps.now ?? (() => Date.now());
     this.opponent = deps.opponent;
     this.rng = deps.rng ?? Math.random;
     this.delay = deps.delay ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
@@ -60,6 +77,8 @@ export class GameManager {
       throw new Error('Bilgisayar rakibi kullanılamıyor');
     }
     this.reset(config, new ChessCore());
+    if (config.clock) this.clock = new ChessClock(config.clock, this.now);
+    this.startClock();
     await this.persist();
     this.emitState();
     this.maybeAskOpponent();
@@ -75,7 +94,10 @@ export class GameManager {
       await clearGame();
       return false;
     }
-    this.reset({ mode: saved.mode, level: saved.level, playerColor: saved.playerColor }, core);
+    const clock = saved.clock ? { initialMs: saved.clock.initialMs, incrementMs: saved.clock.incrementMs } : null;
+    this.reset({ mode: saved.mode, level: saved.level, playerColor: saved.playerColor, clock }, core);
+    if (saved.clock && clock) this.clock = new ChessClock(clock, this.now, { w: saved.clock.w, b: saved.clock.b });
+    this.startClock();
     this.emitState();
     this.maybeAskOpponent();
     return true;
@@ -103,6 +125,8 @@ export class GameManager {
   }
 
   undo(): void {
+    // Saatli oyunda geri alma yoktur: harcanan süre geri verilemez.
+    if (this.clock) return;
     if (this.config.mode === 'ai') {
       if (this.thinking) {
         // Rakip düşünürken geri alma: bekleyen yanıt geçersiz olur, oyuncunun hamlesi geri alınır.
@@ -131,7 +155,9 @@ export class GameManager {
     this.generation++;
     this.thinking = false;
     this.resigned = this.config.mode === 'ai' ? this.config.playerColor : this.core.turn();
+    this.stopClock();
     void clearGame();
+    this.archive();
     this.emitState();
   }
 
@@ -144,6 +170,7 @@ export class GameManager {
       config: { ...this.config },
       thinking: this.thinking,
       opponentFailed: this.opponentFailed,
+      clock: this.clock ? this.clock.snapshot() : null,
     };
   }
 
@@ -153,9 +180,36 @@ export class GameManager {
 
   on(event: 'move', cb: MoveListener): void;
   on(event: 'state', cb: StateListener): void;
-  on(event: 'move' | 'state', cb: MoveListener | StateListener): void {
+  on(event: 'clock', cb: ClockListener): void;
+  on(event: 'move' | 'state' | 'clock', cb: MoveListener | StateListener | ClockListener): void {
     if (event === 'move') this.moveListeners.push(cb as MoveListener);
+    else if (event === 'clock') this.clockListeners.push(cb as ClockListener);
     else this.stateListeners.push(cb as StateListener);
+  }
+
+  /** Saati denetler: süresi biten taraf kaybeder. Kendi zamanlayıcısı çağırır; testler doğrudan çağırabilir. */
+  tick(): void {
+    if (!this.clock || this.result().kind !== 'ongoing') return;
+    const loser = this.clock.flagged();
+    if (loser) {
+      this.flagged = loser;
+      this.generation++;
+      this.thinking = false;
+      this.stopClock();
+      void clearGame();
+      this.archive();
+      this.emitState();
+      return;
+    }
+    const snap = this.clock.snapshot();
+    for (const cb of this.clockListeners) cb(snap);
+  }
+
+  /** Oyundan çıkılırken çağrılır: saat durur, kalan süre kaydedilir. */
+  suspend(): void {
+    if (!this.clock || this.result().kind !== 'ongoing') return;
+    this.stopClock();
+    void this.persist();
   }
 
   private reset(config: GameConfig, core: ChessCore): void {
@@ -165,10 +219,44 @@ export class GameManager {
     this.resigned = null;
     this.thinking = false;
     this.opponentFailed = false;
+    this.stopClock();
+    this.clock = null;
+    this.flagged = null;
+    this.archived = false;
+  }
+
+  private startClock(): void {
+    if (!this.clock || this.result().kind !== 'ongoing') return;
+    this.clock.start(this.core.turn());
+    if (this.clockTimer) clearInterval(this.clockTimer);
+    this.clockTimer = setInterval(() => this.tick(), CLOCK_TICK_MS);
+  }
+
+  private stopClock(): void {
+    this.clock?.pause();
+    if (this.clockTimer) clearInterval(this.clockTimer);
+    this.clockTimer = null;
+  }
+
+  /** Biten oyunu geçmişe yazar (hamlesiz oyunlar yazılmaz). */
+  private archive(): void {
+    const result = this.result();
+    if (this.archived || result.kind === 'ongoing' || this.core.history().length === 0) return;
+    this.archived = true;
+    void addHistory({
+      date: new Date(this.now()).toISOString(),
+      mode: this.config.mode,
+      level: this.config.level,
+      playerColor: this.config.playerColor,
+      result,
+      moves: this.core.history().length,
+      pgn: this.core.pgn(),
+    });
   }
 
   private result(): GameResult {
     if (this.resigned) return { kind: 'resigned', winner: opposite(this.resigned) };
+    if (this.flagged) return { kind: 'timeout', winner: opposite(this.flagged) };
     return this.core.result();
   }
 
@@ -178,15 +266,28 @@ export class GameManager {
   }
 
   private async afterMove(ev: MoveEvent): Promise<void> {
+    if (ev.result.kind === 'ongoing') this.clock?.press(ev.color);
+    else this.stopClock();
     for (const cb of this.moveListeners) cb(ev);
     this.emitState();
-    if (ev.result.kind === 'ongoing') await this.persist();
-    else await clearGame();
+    if (ev.result.kind === 'ongoing') {
+      await this.persist();
+    } else {
+      this.archive();
+      await clearGame();
+    }
   }
 
   private async persist(): Promise<void> {
     try {
-      await saveGame({ pgn: this.core.pgn(), ...this.config });
+      const { clock: _clock, ...config } = this.config;
+      const snap = this.clock?.snapshot();
+      const cfg = this.clock?.config();
+      await saveGame({
+        pgn: this.core.pgn(),
+        ...config,
+        ...(snap && cfg ? { clock: { ...cfg, w: snap.w, b: snap.b } } : {}),
+      });
     } catch {
       // Kayıt başarısız olsa da oyun sürer; yalnızca sayfa yenilenince devam edilemez.
     }

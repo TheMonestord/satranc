@@ -13,7 +13,8 @@ export type GameResult =
   | { kind: 'ongoing'; check: boolean }
   | { kind: 'checkmate'; winner: Color }
   | { kind: 'draw'; reason: 'stalemate' | 'threefold' | 'fiftyMove' | 'insufficient' }
-  | { kind: 'resigned'; winner: Color };
+  | { kind: 'resigned'; winner: Color }
+  | { kind: 'timeout'; winner: Color };
 
 /** Yapılmış bir hamlenin, görünümlerin canlandırmak için ihtiyaç duyduğu tam tarifi. */
 export interface MoveEvent {

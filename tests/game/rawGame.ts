@@ -1,10 +1,10 @@
-import { DB_NAME, GAME_KEY, GAME_STORE } from '../../src/game/storage';
+import { DB_NAME, DB_VERSION, GAME_KEY, GAME_STORE, upgradeDb } from '../../src/game/storage';
 
 /** Testler için: doğrulamadan geçmeyen ham bir kaydı doğrudan IndexedDB'ye yazar. */
 export function writeRawGame(value: unknown): Promise<void> {
   return new Promise((resolve, reject) => {
-    const open = indexedDB.open(DB_NAME, 1);
-    open.onupgradeneeded = () => open.result.createObjectStore(GAME_STORE);
+    const open = indexedDB.open(DB_NAME, DB_VERSION);
+    open.onupgradeneeded = () => upgradeDb(open.result);
     open.onerror = () => reject(open.error);
     open.onsuccess = () => {
       const db = open.result;

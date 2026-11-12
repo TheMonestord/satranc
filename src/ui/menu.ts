@@ -1,5 +1,6 @@
 import type { Color } from '../core/types';
 import { LEVEL_IDS, type LevelId } from '../engine/levels';
+import { TIME_CONTROLS } from '../game/clock';
 import type { GameConfig } from '../game/gameManager';
 import { t } from './i18n';
 
@@ -9,6 +10,7 @@ export interface MenuOptions {
   canResume: boolean;
   aiAvailable: boolean;
   onSettings?: () => void;
+  onHistory?: () => void;
   rng?: () => number;
 }
 
@@ -87,10 +89,15 @@ export function showMenu(host: HTMLElement, opts: MenuOptions): Promise<MenuChoi
       const local = button(t('menu.twoPlayers'), 'btn big');
       local.dataset.menu = 'local';
       local.title = t('menu.twoPlayersHint');
-      local.addEventListener('click', () =>
-        resolve({ action: 'new', config: { mode: 'local', level: 'easy', playerColor: 'w' } }),
-      );
+      local.addEventListener('click', showLocalSetup);
       list.append(local);
+
+      if (opts.onHistory) {
+        const history = button(t('menu.history'), 'btn ghost');
+        history.dataset.menu = 'history';
+        history.addEventListener('click', () => opts.onHistory?.());
+        list.append(history);
+      }
 
       if (opts.onSettings) {
         const settings = button(t('menu.settings'), 'btn ghost');
@@ -106,6 +113,28 @@ export function showMenu(host: HTMLElement, opts: MenuOptions): Promise<MenuChoi
         note.textContent = t('ai.unavailable');
         root.append(note);
       }
+    };
+
+    const showLocalSetup = () => {
+      const time = choiceGroup<string>(
+        t('menu.time'),
+        'time',
+        TIME_CONTROLS.map((c) => ({ value: c.id, label: c.clock ? c.id : t('time.none') })),
+        'none',
+      );
+      const row = document.createElement('div');
+      row.className = 'dialog-row';
+      const back = button(t('menu.back'));
+      back.dataset.menu = 'back';
+      back.addEventListener('click', showMain);
+      const start = button(t('menu.start'), 'btn primary');
+      start.dataset.menu = 'start';
+      start.addEventListener('click', () => {
+        const clock = TIME_CONTROLS.find((c) => c.id === time.value())?.clock ?? null;
+        resolve({ action: 'new', config: { mode: 'local', level: 'easy', playerColor: 'w', clock } });
+      });
+      row.append(back, start);
+      root.replaceChildren(header(), time.el, row);
     };
 
     const showAiSetup = () => {

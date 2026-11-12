@@ -14,6 +14,7 @@ import { confirmDialog } from './ui/dialog';
 import { GameScreen, type ViewKind } from './ui/gameScreen';
 import { detectLang, setLang, t } from './ui/i18n';
 import { showMenu } from './ui/menu';
+import { showHistory } from './ui/historyScreen';
 import { showSettings } from './ui/settings';
 
 const THEME_BASE = 'temalar/';
@@ -80,6 +81,15 @@ export class App {
     const choice = await showMenu(this.host, {
       canResume,
       aiAvailable: this.aiAvailable,
+      onHistory: () =>
+        void showHistory(document.body, async (text) => {
+          try {
+            await navigator.clipboard.writeText(text);
+            return true;
+          } catch {
+            return false;
+          }
+        }),
       onSettings: () =>
         void this.openSettings().then(() => {
           // Menü açıkken dil değiştiyse menüyü yeni dilde yeniden çiz.

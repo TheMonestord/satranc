@@ -21,13 +21,32 @@ describe('showMenu', () => {
     await expect(p).resolves.toEqual({ action: 'resume' });
   });
 
-  test('İki Kişi seçimi', async () => {
+  test('İki Kişi: süre seçilmezse oyun süresizdir', async () => {
     const p = showMenu(document.body, { canResume: false, aiAvailable: true });
     q('[data-menu="local"]').click();
+    q('[data-menu="start"]').click();
     await expect(p).resolves.toEqual({
       action: 'new',
-      config: { mode: 'local', level: 'easy', playerColor: 'w' },
+      config: { mode: 'local', level: 'easy', playerColor: 'w', clock: null },
     });
+  });
+
+  test('İki Kişi: seçilen süre oyuna aktarılır', async () => {
+    const p = showMenu(document.body, { canResume: false, aiAvailable: true });
+    q('[data-menu="local"]').click();
+    q('[data-time="5+0"]').click();
+    q('[data-menu="start"]').click();
+    await expect(p).resolves.toEqual({
+      action: 'new',
+      config: { mode: 'local', level: 'easy', playerColor: 'w', clock: { initialMs: 300_000, incrementMs: 0 } },
+    });
+  });
+
+  test('Geçmiş Oyunlar düğmesi dinleyiciyi çağırır', () => {
+    let opened = 0;
+    void showMenu(document.body, { canResume: false, aiAvailable: true, onHistory: () => opened++ });
+    q('[data-menu="history"]').click();
+    expect(opened).toBe(1);
   });
 
   test('bilgisayara karşı: seviye ve renk seçilir', async () => {

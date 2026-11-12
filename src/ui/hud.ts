@@ -1,6 +1,7 @@
-import type { Color } from '../core/types';
+import { formatClock, type ClockSnapshot } from '../game/clock';
 import type { GameState } from '../game/gameManager';
 import { t } from './i18n';
+import { resultText, sideName } from './resultText';
 
 export type HudAction = 'undo' | 'flip' | 'view' | 'resign' | 'fen' | 'pgn' | 'settings' | 'menu';
 
@@ -11,13 +12,11 @@ export interface HudOptions {
 
 const ACTIONS: HudAction[] = ['undo', 'flip', 'view', 'resign', 'fen', 'pgn', 'settings', 'menu'];
 
-function sideName(color: Color): string {
-  return t(color === 'w' ? 'color.white' : 'color.black');
-}
-
 /** Yan panel: durum satırı, hamle listesi ve düğmeler. */
 export class Hud {
   readonly root = document.createElement('aside');
+  private clocks = document.createElement('div');
+  private clockEls = { w: document.createElement('div'), b: document.createElement('div') };
   private status = document.createElement('div');
   private movesTitle = document.createElement('h2');
   private moves = document.createElement('ol');
@@ -29,6 +28,13 @@ export class Hud {
 
   constructor(private opts: HudOptions) {
     this.root.className = 'panel';
+    this.clocks.className = 'clocks';
+    this.clocks.hidden = true;
+    for (const color of ['b', 'w'] as const) {
+      this.clockEls[color].className = 'clock';
+      this.clockEls[color].dataset.clock = color;
+      this.clocks.append(this.clockEls[color]);
+    }
     this.status.className = 'status';
     this.status.setAttribute('aria-live', 'polite');
     this.movesTitle.className = 'moves-title';
@@ -48,7 +54,7 @@ export class Hud {
       actions.append(btn);
     }
     this.buttons.get('view')!.disabled = !opts.can3d;
-    this.root.append(this.status, this.movesTitle, this.moves, actions, this.toast);
+    this.root.append(this.clocks, this.status, this.movesTitle, this.moves, actions, this.toast);
     this.refreshLabels();
   }
 
@@ -106,11 +112,25 @@ export class Hud {
     this.moves.scrollTop = this.moves.scrollHeight;
 
     const ongoing = s.result.kind === 'ongoing';
+    this.updateClock(s.clock);
     const canUndo =
+      !s.clock &&
       s.history.length > 0 &&
       (s.config.mode === 'local' || s.thinking || s.turn !== s.config.playerColor || s.history.length >= 2);
     this.buttons.get('undo')!.disabled = !canUndo;
     this.buttons.get('resign')!.disabled = !ongoing;
+  }
+
+  /** Saatleri günceller; süresiz oyunda saatler gizlenir. */
+  updateClock(clock: ClockSnapshot | null): void {
+    this.clocks.hidden = !clock;
+    if (!clock) return;
+    for (const color of ['w', 'b'] as const) {
+      const el = this.clockEls[color];
+      el.textContent = `${sideName(color)}  ${formatClock(clock[color])}`;
+      el.classList.toggle('active', clock.running === color);
+      el.classList.toggle('low', clock[color] < 20_000);
+    }
   }
 
   showToast(message: string): void {
@@ -123,18 +143,14 @@ export class Hud {
   private statusText(s: GameState): string {
     const r = s.result;
     switch (r.kind) {
-      case 'checkmate':
-        return t('status.checkmate', { side: sideName(r.winner) });
-      case 'resigned':
-        return t('status.resigned', { side: sideName(r.winner) });
-      case 'draw':
-        return t(`status.draw.${r.reason}`);
       case 'ongoing': {
         if (s.opponentFailed) return t('status.opponentFailed');
         if (s.thinking) return t('status.thinking');
         const turn = t('status.turn', { side: sideName(s.turn) });
         return r.check ? `${t('status.check')} ${turn}` : turn;
       }
+      default:
+        return resultText(r);
     }
   }
 }

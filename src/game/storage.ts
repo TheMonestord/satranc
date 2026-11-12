@@ -1,4 +1,4 @@
-import type { Color } from '../core/types';
+import type { Color, GameResult } from '../core/types';
 import { LEVEL_IDS, type LevelId } from '../engine/levels';
 
 export interface Settings {
@@ -70,23 +70,55 @@ export function saveSettings(s: Settings): void {
   }
 }
 
+export interface SavedClock {
+  initialMs: number;
+  incrementMs: number;
+  w: number;
+  b: number;
+}
+
 export interface SavedGame {
   pgn: string;
   mode: 'ai' | 'local';
   level: LevelId;
   playerColor: Color;
+  /** Saatli oyunda kalan süreler. */
+  clock?: SavedClock;
 }
 
+/** Bitmiş bir oyunun geçmiş kaydı. */
+export interface HistoryEntry {
+  id?: number;
+  /** ISO tarih-saat. */
+  date: string;
+  mode: 'ai' | 'local';
+  level: LevelId;
+  playerColor: Color;
+  result: GameResult;
+  moves: number;
+  pgn: string;
+}
+
+export const HISTORY_LIMIT = 100;
+
 export const DB_NAME = 'satranc';
+export const DB_VERSION = 2;
 export const GAME_STORE = 'oyun';
 export const GAME_KEY = 'aktif';
+export const HISTORY_STORE = 'gecmis';
+
+/** Eksik depoları oluşturur; eski sürümden gelen veriler korunur. */
+export function upgradeDb(db: IDBDatabase): void {
+  if (!db.objectStoreNames.contains(GAME_STORE)) db.createObjectStore(GAME_STORE);
+  if (!db.objectStoreNames.contains(HISTORY_STORE)) {
+    db.createObjectStore(HISTORY_STORE, { keyPath: 'id', autoIncrement: true });
+  }
+}
 
 function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
-    const open = indexedDB.open(DB_NAME, 1);
-    open.onupgradeneeded = () => {
-      if (!open.result.objectStoreNames.contains(GAME_STORE)) open.result.createObjectStore(GAME_STORE);
-    };
+    const open = indexedDB.open(DB_NAME, DB_VERSION);
+    open.onupgradeneeded = () => upgradeDb(open.result);
     open.onsuccess = () => resolve(open.result);
     open.onerror = () => reject(open.error);
   });
@@ -95,12 +127,13 @@ function openDb(): Promise<IDBDatabase> {
 async function withStore<T>(
   mode: IDBTransactionMode,
   run: (store: IDBObjectStore) => IDBRequest<T>,
+  storeName: string = GAME_STORE,
 ): Promise<T> {
   const db = await openDb();
   try {
     return await new Promise<T>((resolve, reject) => {
-      const tx = db.transaction(GAME_STORE, mode);
-      const req = run(tx.objectStore(GAME_STORE));
+      const tx = db.transaction(storeName, mode);
+      const req = run(tx.objectStore(storeName));
       tx.oncomplete = () => resolve(req.result);
       tx.onerror = () => reject(tx.error);
       tx.onabort = () => reject(tx.error);
@@ -110,6 +143,12 @@ async function withStore<T>(
   }
 }
 
+function isSavedClock(v: unknown): v is SavedClock {
+  if (!v || typeof v !== 'object') return false;
+  const c = v as Record<string, unknown>;
+  return ['initialMs', 'incrementMs', 'w', 'b'].every((k) => typeof c[k] === 'number' && Number.isFinite(c[k]) && (c[k] as number) >= 0);
+}
+
 function isSavedGame(v: unknown): v is SavedGame {
   if (!v || typeof v !== 'object') return false;
   const g = v as Record<string, unknown>;
@@ -117,7 +156,8 @@ function isSavedGame(v: unknown): v is SavedGame {
     typeof g.pgn === 'string' &&
     (g.mode === 'ai' || g.mode === 'local') &&
     LEVEL_IDS.includes(g.level as LevelId) &&
-    (g.playerColor === 'w' || g.playerColor === 'b')
+    (g.playerColor === 'w' || g.playerColor === 'b') &&
+    (g.clock === undefined || isSavedClock(g.clock))
   );
 }
 
@@ -140,5 +180,52 @@ export async function clearGame(): Promise<void> {
     await withStore('readwrite', (s) => s.delete(GAME_KEY));
   } catch {
     // Silinemeyen kayıt bir sonraki açılışta yeniden doğrulanır.
+  }
+}
+
+function isHistoryEntry(v: unknown): v is HistoryEntry {
+  if (!v || typeof v !== 'object') return false;
+  const h = v as Record<string, unknown>;
+  const r = h.result as { kind?: unknown } | undefined;
+  return (
+    typeof h.date === 'string' &&
+    typeof h.pgn === 'string' &&
+    typeof h.moves === 'number' &&
+    (h.mode === 'ai' || h.mode === 'local') &&
+    LEVEL_IDS.includes(h.level as LevelId) &&
+    (h.playerColor === 'w' || h.playerColor === 'b') &&
+    !!r &&
+    typeof r.kind === 'string'
+  );
+}
+
+/** Bitmiş oyunu geçmişe ekler; en eski kayıtlar `HISTORY_LIMIT` aşılınca silinir. */
+export async function addHistory(entry: HistoryEntry): Promise<void> {
+  try {
+    await withStore('readwrite', (s) => s.add(entry), HISTORY_STORE);
+    const keys = await withStore<IDBValidKey[]>('readonly', (s) => s.getAllKeys(), HISTORY_STORE);
+    for (const key of keys.slice(0, Math.max(0, keys.length - HISTORY_LIMIT))) {
+      await withStore('readwrite', (s) => s.delete(key), HISTORY_STORE);
+    }
+  } catch {
+    // Geçmiş kaydedilemese de oyun etkilenmez.
+  }
+}
+
+/** En yeni oyun başta. Bozuk kayıtlar atlanır. */
+export async function listHistory(): Promise<HistoryEntry[]> {
+  try {
+    const all = await withStore<unknown[]>('readonly', (s) => s.getAll(), HISTORY_STORE);
+    return all.filter(isHistoryEntry).reverse();
+  } catch {
+    return [];
+  }
+}
+
+export async function clearHistory(): Promise<void> {
+  try {
+    await withStore('readwrite', (s) => s.clear(), HISTORY_STORE);
+  } catch {
+    // Silinemeyen geçmiş yerinde kalır.
   }
 }

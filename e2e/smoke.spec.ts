@@ -30,6 +30,13 @@ async function click2d(page: Page, sq: string): Promise<void> {
 
 const moves = (page: Page) => page.locator('.moves .move');
 
+/** İki kişilik oyun başlatır; `time` verilirse o süreyle. */
+async function startLocal(page: Page, time?: string): Promise<void> {
+  await page.click('[data-menu="local"]');
+  if (time) await page.click(`[data-time="${time}"]`);
+  await page.click('[data-menu="start"]');
+}
+
 test.beforeEach(async ({ page }) => {
   await page.goto('/');
   await page.evaluate(async () => {
@@ -45,7 +52,7 @@ test.beforeEach(async ({ page }) => {
 test('iki kişilik oyun: 3D hamle, görünüm değişimi, yenileme sonrası devam', async ({ page }) => {
   const errors = collectErrors(page);
   await expect(page.locator('[data-menu="local"]')).toBeVisible();
-  await page.click('[data-menu="local"]');
+  await startLocal(page);
   await expect(page.locator('canvas')).toBeVisible();
 
   await click3d(page, 'e2', 0.8);
@@ -85,7 +92,7 @@ test('bilgisayara karşı: rakip 10 saniye içinde cevap verir', async ({ page }
 });
 
 test('ayarlar: yeni masa teması kod değişmeden seçilebilir ve kalıcıdır', async ({ page }) => {
-  await page.click('[data-menu="local"]');
+  await startLocal(page);
   await page.click('[data-action="settings"]');
   await page.selectOption('[data-setting="theme.masa"]', 'mermer');
   await page.selectOption('[data-setting="view"]', '2d');
@@ -99,11 +106,49 @@ test('ayarlar: yeni masa teması kod değişmeden seçilebilir ve kalıcıdır',
   expect(await dark()).toBe('#769656');
 });
 
+test('yürüyen taşlar modu: taşlar kendi yürür, taş alma ve hamle listesi doğru', async ({ page }) => {
+  const errors = collectErrors(page);
+  await page.click('[data-menu="settings"]');
+  await page.selectOption('[data-setting="motion"]', 'walk');
+  await page.selectOption('[data-setting="animation"]', 'fast');
+  await page.click('[data-settings="close"]');
+  await startLocal(page);
+  await expect(page.locator('canvas')).toBeVisible();
+  for (const [from, to, h] of [['e2', 'e4', 0.8], ['d7', 'd5', 0.8], ['e4', 'd5', 0.8], ['g8', 'f6', 1.0]] as const) {
+    await click3d(page, from, h);
+    await click3d(page, to, to === 'd5' && from === 'e4' ? 0.8 : 0);
+    await page.waitForTimeout(900);
+  }
+  await expect(moves(page)).toHaveText(['e4', 'd5', 'exd5', 'Nf6']);
+  await page.click('[data-action="view"]');
+  await expect(page.locator('.board2d .piece')).toHaveCount(31);
+  expect(errors).toEqual([]);
+});
+
+test('saatli oyun ve geçmiş: süre akar, pes edilen oyun geçmişte görünür', async ({ page }) => {
+  await startLocal(page, '3+2');
+  await expect(page.locator('[data-clock="w"]')).toContainText('3:00');
+  await page.click('[data-action="view"]');
+  await click2d(page, 'e2');
+  await click2d(page, 'e4');
+  await expect(page.locator('[data-clock="b"]')).toHaveClass(/active/);
+  await expect(page.locator('[data-clock="w"]')).toContainText('3:0'); // ek süre yazıldı: 3:01 veya 3:02
+  await expect(page.locator('[data-clock="b"]')).toContainText('2:5', { timeout: 5000 });
+  await expect(page.locator('[data-action="undo"]')).toBeDisabled();
+  await page.click('[data-action="resign"]');
+  await page.click('[data-confirm="yes"]');
+  await expect(page.locator('.status')).toContainText(/Beyaz kazandı|White wins/);
+  await page.click('[data-action="menu"]');
+  await page.click('[data-menu="history"]');
+  await expect(page.locator('.history-item')).toHaveCount(1);
+  await expect(page.locator('.history-meta')).toContainText(/1 hamle|Moves: 1/);
+});
+
 test.describe('telefon', () => {
   test.use({ viewport: { width: 360, height: 740 }, hasTouch: true, isMobile: true });
 
   test('360 px genişlikte tahta sığar ve dokunmayla oynanır', async ({ page }) => {
-    await page.click('[data-menu="local"]');
+    await startLocal(page);
     await expect(page.locator('canvas')).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
     const canvas = await page.locator('canvas').boundingBox();

@@ -495,3 +495,80 @@ button {
     transition: none !important;
   }
 }
+
+/* ---------- Satranç saati ---------- */
+
+.clocks {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.clocks[hidden] {
+  display: none;
+}
+
+.clock {
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg-2);
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  text-align: center;
+  white-space: pre;
+}
+
+.clock.active {
+  border-color: var(--accent);
+  color: var(--text);
+  background: var(--bg-3);
+}
+
+.clock.low.active {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+/* ---------- Geçmiş oyunlar ---------- */
+
+.dialog.history {
+  width: min(560px, calc(100vw - 32px));
+}
+
+.history-list {
+  list-style: none;
+  margin: 0 0 14px;
+  padding: 0;
+  max-height: min(50vh, 420px);
+  overflow-y: auto;
+  display: grid;
+  gap: 8px;
+}
+
+.history-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg-2);
+}
+
+.history-result {
+  font-weight: 600;
+}
+
+.history-meta,
+.history-empty {
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
+.history-item .btn {
+  flex: none;
+}

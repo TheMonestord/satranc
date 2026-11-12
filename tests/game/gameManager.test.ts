@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto';
 import { beforeEach, describe, expect, test } from 'vitest';
 import { GameManager, type Opponent } from '../../src/game/gameManager';
-import { clearGame, loadGame, saveGame } from '../../src/game/storage';
+import { clearGame, clearHistory, listHistory, loadGame, saveGame } from '../../src/game/storage';
 import { writeRawGame } from './rawGame';
 import type { MoveEvent, MoveRequest } from '../../src/core/types';
 
@@ -218,5 +218,100 @@ describe('GameManager', () => {
     await new Promise((r) => setTimeout(r, 0));
     expect(gm.state().history).toEqual([]);
     expect(gm.state().thinking).toBe(false);
+  });
+
+  describe('saat ve geçmiş', () => {
+    beforeEach(async () => {
+      await clearHistory();
+    });
+
+    const clock = { initialMs: 60_000, incrementMs: 2000 };
+    function timed() {
+      let now = 1_700_000_000_000;
+      const gm = new GameManager({ opponent: null, rng: neverBlunder, delay: noDelay, now: () => now });
+      return { gm, pass: (ms: number) => (now += ms) };
+    }
+
+    test('saatli oyunda süre sırası olanın hanesinden düşer, hamle yapana ek süre yazılır', async () => {
+      const { gm, pass } = timed();
+      await gm.start({ mode: 'local', level: 'easy', playerColor: 'w', clock });
+      pass(10_000);
+      await gm.tryMove({ from: 'e2', to: 'e4' });
+      pass(3000);
+      expect(gm.state().clock).toEqual({ w: 52_000, b: 57_000, running: 'b' });
+      gm.resign();
+    });
+
+    test('süresi biten taraf kaybeder ve hamle yapılamaz', async () => {
+      const { gm, pass } = timed();
+      await gm.start({ mode: 'local', level: 'easy', playerColor: 'w', clock });
+      await gm.tryMove({ from: 'e2', to: 'e4' });
+      pass(61_000);
+      gm.tick();
+      expect(gm.state().result).toEqual({ kind: 'timeout', winner: 'w' });
+      expect(await gm.tryMove({ from: 'e7', to: 'e5' })).toBeNull();
+      expect(await loadGame()).toBeNull();
+    });
+
+    test('saatli oyunda geri alma yoktur', async () => {
+      const { gm } = timed();
+      await gm.start({ mode: 'local', level: 'easy', playerColor: 'w', clock });
+      await gm.tryMove({ from: 'e2', to: 'e4' });
+      gm.undo();
+      expect(gm.state().history).toEqual(['e4']);
+      gm.resign();
+    });
+
+    test('kalan süreler kaydedilir ve devam edince geri gelir', async () => {
+      const { gm, pass } = timed();
+      await gm.start({ mode: 'local', level: 'easy', playerColor: 'w', clock });
+      pass(10_000);
+      await gm.tryMove({ from: 'e2', to: 'e4' });
+      gm.suspend();
+
+      const again = timed();
+      expect(await again.gm.resume()).toBe(true);
+      expect(again.gm.state().clock).toEqual({ w: 52_000, b: 60_000, running: 'b' });
+      again.gm.resign();
+    });
+
+    test('süresiz oyunda saat yoktur', async () => {
+      const { gm } = make(null);
+      await gm.start({ mode: 'local', level: 'easy', playerColor: 'w' });
+      expect(gm.state().clock).toBeNull();
+    });
+
+    test('biten oyun geçmişe bir kez yazılır; hamlesiz pes edilen oyun yazılmaz', async () => {
+      const { gm } = make(null);
+      await gm.start({ mode: 'local', level: 'easy', playerColor: 'w' });
+      gm.resign();
+      await new Promise((r) => setTimeout(r, 20));
+      expect(await listHistory()).toEqual([]);
+
+      await gm.start({ mode: 'local', level: 'easy', playerColor: 'w' });
+      for (const [from, to] of [['f2', 'f3'], ['e7', 'e5'], ['g2', 'g4'], ['d8', 'h4']]) await gm.tryMove({ from, to });
+      await new Promise((r) => setTimeout(r, 20));
+      const history = await listHistory();
+      expect(history).toHaveLength(1);
+      expect(history[0].result).toEqual({ kind: 'checkmate', winner: 'b' });
+      expect(history[0].moves).toBe(4);
+      expect(history[0].pgn).toContain('Qh4#');
+    });
+
+    test('pes edilen oyun geçmişe yazılır; en yeni oyun başta gelir', async () => {
+      const { gm } = make(null);
+      await gm.start({ mode: 'local', level: 'easy', playerColor: 'w' });
+      await gm.tryMove({ from: 'e2', to: 'e4' });
+      gm.resign();
+      await new Promise((r) => setTimeout(r, 20));
+      await gm.start({ mode: 'local', level: 'easy', playerColor: 'w' });
+      await gm.tryMove({ from: 'd2', to: 'd4' });
+      await gm.tryMove({ from: 'd7', to: 'd5' });
+      gm.resign();
+      await new Promise((r) => setTimeout(r, 20));
+      const history = await listHistory();
+      expect(history.map((h) => h.moves)).toEqual([2, 1]);
+      expect(history[0].result.kind).toBe('resigned');
+    });
   });
 });

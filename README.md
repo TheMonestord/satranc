@@ -45,7 +45,7 @@ Renkler `#rrggbb` biçimindedir.
 
 | Yuva | Alanlar |
 |---|---|
-| `ortam` | `arkaPlan`, `zemin`, `isikRengi`, `isikSiddeti` (0–5) |
+| `ortam` | `arkaPlan`, `zemin`, `isikRengi`, `isikSiddeti` (0–5), isteğe bağlı `muzik` (`sakin`, `gece` veya `gunduz`) |
 | `masa` | `acikKare`, `koyuKare`, `cerceve`, `masaRengi` |
 | `taslar` | `beyaz`, `siyah`, `parlaklik` (0–1) |
 | `eller` | `renk`, isteğe bağlı `kolRengi` |
