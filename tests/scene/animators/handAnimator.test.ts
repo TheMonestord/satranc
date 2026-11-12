@@ -1,9 +1,9 @@
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test, vi } from 'vitest';
 import * as THREE from 'three';
-import { HandAnimator, type AnimationClock } from '../../../src/scene/animators/handAnimator';
+import { HAND_TIMINGS, HandAnimator, type AnimationClock } from '../../../src/scene/animators/handAnimator';
 import type { MoveAnimatorHost } from '../../../src/scene/animators/types';
 import { squareToWorld } from '../../../src/scene/view3d/table';
-import { Scene3D } from '../../../src/scene/view3d/scene3d';
+import { MOVE_GAP_MS, Scene3D } from '../../../src/scene/view3d/scene3d';
 import { ChessCore } from '../../../src/core/chessCore';
 import type { Color, MoveEvent, PieceType, Square } from '../../../src/core/types';
 import type { EllerTheme, MasaTheme, OrtamTheme, TaslarTheme } from '../../../src/themes/types';
@@ -74,7 +74,8 @@ function play(core: ChessCore, ...moves: string[]): MoveEvent {
 }
 
 const flush = () => new Promise((r) => setTimeout(r, 0));
-const NORMAL_MOVE_MS = 350 + 120 + 450 + 120 + 300;
+const T = HAND_TIMINGS;
+const NORMAL_MOVE_MS = T.reach + T.grab + T.carry + T.release + T.retreat;
 
 describe('HandAnimator', () => {
   test('normal hamle bitince taş hedef karededir ve el sahneden kalkar', async () => {
@@ -106,7 +107,7 @@ describe('HandAnimator', () => {
     const anim = new HandAnimator(host, eller, clock);
     const pawn = pieces.get('e2')!;
     void anim.play(play(core, 'e2e4'), 1);
-    advance(350 + 120 + 225);
+    advance(T.reach + T.grab + T.carry / 2);
     expect(pawn.position.y).toBeGreaterThan(0.8);
     expect(pawn.position.z).toBeLessThan(squareToWorld('e2').z);
     expect(pawn.position.z).toBeGreaterThan(squareToWorld('e4').z);
@@ -234,7 +235,8 @@ describe('Scene3D + HandAnimator', () => {
     id: 't', tur: 'taslar', ad: { tr: 'a', en: 'b' }, baseUrl: '', beyaz: '#f2e9d8', siyah: '#2a2420', parlaklik: 0.45,
   };
 
-  test('art arda iki hamle: ilki anında tamamlanır, son konum ikinci hamleninkidir', async () => {
+  test('art arda iki hamle sırayla canlandırılır; son konum ikinci hamleninkidir', async () => {
+    vi.useFakeTimers();
     const core = new ChessCore();
     const scene = new Scene3D({ ortam, masa, taslar }, 'low');
     const { clock, advance } = fakeClock();
@@ -244,15 +246,21 @@ describe('Scene3D + HandAnimator', () => {
     const ev1 = play(core, 'e2e4');
     const after1 = core.pieces();
     const first = scene.applyMove(ev1, after1);
+    await vi.advanceTimersByTimeAsync(0);
     advance(300);
     const ev2 = play(core, 'e7e5');
     const second = scene.applyMove(ev2, core.pieces());
+    // İlk el hâlâ taşıyor: ikinci hamle onu kesmez.
+    expect(scene.pieceAt('e7')?.userData.piece).toBe('p');
+    advance(5000);
     await first;
     expect(scene.pieceAt('e4')?.userData.piece).toBe('p');
     expect(scene.pieceAt('e2')).toBeNull();
 
+    await vi.advanceTimersByTimeAsync(MOVE_GAP_MS);
     advance(5000);
     await second;
+    vi.useRealTimers();
     expect(scene.pieceAt('e5')?.userData).toMatchObject({ piece: 'p', color: 'b' });
     expect(scene.pieceAt('e7')).toBeNull();
     expect(scene.pieceAt('e4')?.position.toArray()).toEqual(squareToWorld('e4').toArray());

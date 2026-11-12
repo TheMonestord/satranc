@@ -19,19 +19,20 @@ const REAL_CLOCK: AnimationClock = {
   },
 };
 
-/** Normal hızdaki süreler (ms) */
-const T = {
-  reach: 350,
-  grab: 120,
-  carry: 450,
-  release: 120,
-  retreat: 300,
-  removeReach: 250,
-  removeGrab: 100,
-  removeCarry: 250,
-  removeRelease: 100,
-  swap: 150,
+/** Normal hızdaki süreler (ms). Bir hamle yaklaşık 2,4 saniye sürer. */
+export const HAND_TIMINGS = {
+  reach: 600,
+  grab: 220,
+  carry: 800,
+  release: 220,
+  retreat: 550,
+  removeReach: 450,
+  removeGrab: 180,
+  removeCarry: 450,
+  removeRelease: 180,
+  swap: 250,
 };
+const T = HAND_TIMINGS;
 const LIFT = 1.2;
 const REST_Y = 2.5;
 const REST_Z = 6;

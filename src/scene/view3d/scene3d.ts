@@ -19,6 +19,8 @@ const POLAR = THREE.MathUtils.degToRad(42);
 const FOV = 38;
 const FLIP_MS = 600;
 const CLICK_SLOP_PX = 7;
+/** Art arda gelen iki hamlenin canlandırmaları arasındaki duraklama (normal hızda, ms). */
+export const MOVE_GAP_MS = 500;
 const PIECE_TYPES: PieceType[] = ['p', 'n', 'b', 'r', 'q', 'k'];
 
 function disposeObject(obj: THREE.Object3D): void {
@@ -51,7 +53,10 @@ export class Scene3D implements BoardView, MoveAnimatorHost {
 
   private animator: MoveAnimator | null = null;
   private speed = 1;
-  private moveToken = 0;
+  /** setPosition ile artar; daha eski sıradaki hamle canlandırmaları iptal olur. */
+  private epoch = 0;
+  private moveQueue: Promise<void> = Promise.resolve();
+  private queuedMoves = 0;
   private flipped = false;
   private azimuth = 0;
   private distance = 14;
@@ -120,7 +125,7 @@ export class Scene3D implements BoardView, MoveAnimatorHost {
 
   setPosition(pieces: PieceOnBoard[]): void {
     // Dışarıdan gelen konum (geri alma, yeni oyun) bekleyen hamle canlandırmasının sonucunu geçersiz kılar.
-    this.moveToken++;
+    this.epoch++;
     this.syncPosition(pieces);
   }
 
@@ -144,14 +149,29 @@ export class Scene3D implements BoardView, MoveAnimatorHost {
     this.requestRender();
   }
 
-  async applyMove(ev: MoveEvent, piecesAfter: PieceOnBoard[]): Promise<void> {
-    this.animator?.finishNow();
-    const token = ++this.moveToken;
-    if (this.animator && this.speed > 0) {
-      await this.animator.play(ev, this.speed);
-    }
-    // Bu sırada daha yeni bir hamle veya konum geldiyse tahtayı o belirler.
-    if (token === this.moveToken && !this.disposed) this.syncPosition(piecesAfter);
+  /**
+   * Hamleyi canlandırır. Önceki hamlenin canlandırması sürüyorsa kesilmez: yeni hamle onun bitmesini,
+   * ardından kısa bir duraklamayı bekler. Böylece rakibin eli, oyuncunun eli çekilmeden tahtaya girmez.
+   */
+  applyMove(ev: MoveEvent, piecesAfter: PieceOnBoard[]): Promise<void> {
+    const epoch = this.epoch;
+    const mustWait = this.queuedMoves > 0;
+    this.queuedMoves++;
+    const run = this.moveQueue.then(async () => {
+      try {
+        if (epoch !== this.epoch || this.disposed) return;
+        if (this.animator && this.speed > 0) {
+          if (mustWait) await new Promise<void>((r) => setTimeout(r, MOVE_GAP_MS / this.speed));
+          if (epoch !== this.epoch || this.disposed) return;
+          await this.animator.play(ev, this.speed);
+        }
+        if (epoch === this.epoch && !this.disposed) this.syncPosition(piecesAfter);
+      } finally {
+        this.queuedMoves--;
+      }
+    });
+    this.moveQueue = run.catch(() => {});
+    return run;
   }
 
   setHighlights(h: Highlights): void {
