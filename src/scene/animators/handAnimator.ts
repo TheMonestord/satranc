@@ -189,7 +189,10 @@ export class HandAnimator implements MoveAnimator {
       return {
         done: false,
         phases: [{ duration: T.swap, update: () => {} }],
-        complete: () => host.replacePiece(step.square, step.to, step.color),
+        complete: () => {
+          host.replacePiece(step.square, step.to, step.color);
+          host.cue('promote');
+        },
       };
     }
 
@@ -212,6 +215,9 @@ export class HandAnimator implements MoveAnimator {
     };
     const grab: Phase = {
       duration: step.kind === 'carry' ? T.grab : T.removeGrab,
+      enter: () => {
+        if (step.kind === 'remove') host.cue('capture');
+      },
       update: (k) => hand.setGrip(k),
     };
     const follow = () => piece?.position.copy(hand.root.position).sub(offset);
@@ -234,6 +240,7 @@ export class HandAnimator implements MoveAnimator {
           },
           {
             duration: T.release,
+            enter: () => host.cue('place'),
             update: (k) => {
               piece?.position.copy(target);
               hand.setGrip(1 - k);

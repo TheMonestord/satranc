@@ -59,11 +59,15 @@ describe('showSettings', () => {
       'quality',
       'animation',
       'motion',
+      'sound',
+      'music',
       'theme.ortam',
       'theme.masa',
       'theme.taslar',
       'theme.eller',
     ]);
+    const motion = [...field('motion').options].map((o) => o.value);
+    expect(motion).toEqual(['hands', 'walk']);
   });
 
   test('tema listesi kayıt defterindeki temaları etkin dildeki adlarıyla gösterir', () => {

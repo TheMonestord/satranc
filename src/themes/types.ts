@@ -1,3 +1,5 @@
+export type MusicMood = 'sakin' | 'gece' | 'gunduz';
+export const MUSIC_MOODS: MusicMood[] = ['sakin', 'gece', 'gunduz'];
 export type ThemeSlot = 'ortam' | 'masa' | 'taslar' | 'eller';
 export const THEME_SLOTS: ThemeSlot[] = ['ortam', 'masa', 'taslar', 'eller'];
 
@@ -16,6 +18,8 @@ export interface OrtamTheme extends ThemeBase {
   zemin: string;
   isikRengi: string;
   isikSiddeti: number;
+  /** İsteğe bağlı müzik havası; verilmezse 'sakin'. */
+  muzik?: MusicMood;
 }
 
 export interface MasaTheme extends ThemeBase {

@@ -6,6 +6,10 @@ export interface Settings {
   quality: 'low' | 'medium' | 'high';
   animation: 'normal' | 'fast' | 'off';
   view: '3d' | '2d';
+  /** Hareket modu: taşları el oynatır veya taşlar kendi yürür. */
+  motion: 'hands' | 'walk';
+  sound: boolean;
+  music: boolean;
   themes: { ortam: string; masa: string; taslar: string; eller: string };
 }
 
@@ -14,6 +18,9 @@ export const DEFAULT_SETTINGS: Settings = {
   quality: 'medium',
   animation: 'normal',
   view: '3d',
+  motion: 'hands',
+  sound: true,
+  music: false,
   themes: { ortam: 'klasik-oda', masa: 'ahsap', taslar: 'klasik', eller: 'sade' },
 };
 
@@ -43,6 +50,9 @@ export function loadSettings(defaults: Settings = DEFAULT_SETTINGS): Settings {
     quality: oneOf(r.quality, ['low', 'medium', 'high'] as const, defaults.quality),
     animation: oneOf(r.animation, ['normal', 'fast', 'off'] as const, defaults.animation),
     view: oneOf(r.view, ['3d', '2d'] as const, defaults.view),
+    motion: oneOf(r.motion, ['hands', 'walk'] as const, defaults.motion),
+    sound: typeof r.sound === 'boolean' ? r.sound : defaults.sound,
+    music: typeof r.music === 'boolean' ? r.music : defaults.music,
     themes: {
       ortam: str(t.ortam, defaults.themes.ortam),
       masa: str(t.masa, defaults.themes.masa),

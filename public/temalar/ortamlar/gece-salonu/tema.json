@@ -1,0 +1,13 @@
+{
+  "id": "gece-salonu",
+  "tur": "ortam",
+  "ad": {
+    "tr": "Gece Salonu",
+    "en": "Night Hall"
+  },
+  "arkaPlan": "#0b1020",
+  "zemin": "#141a2e",
+  "isikRengi": "#bcd0ff",
+  "isikSiddeti": 1.9,
+  "muzik": "gece"
+}

@@ -1,4 +1,4 @@
-import type { Theme, ThemeSlot } from './types';
+import { MUSIC_MOODS, type MusicMood, type Theme, type ThemeSlot } from './types';
 
 type Result = { ok: true; theme: Theme } | { ok: false; error: string };
 
@@ -50,6 +50,12 @@ export function validateManifest(json: unknown, baseUrl: string): Result {
       return { ok: false, error: `${field}: ${min} ile ${max} arasında bir sayı olmalı` };
     }
     out[field] = v;
+  }
+  if (tur === 'ortam' && j.muzik !== undefined) {
+    if (!MUSIC_MOODS.includes(j.muzik as MusicMood)) {
+      return { ok: false, error: `muzik: ${MUSIC_MOODS.join(', ')} değerlerinden biri olmalı` };
+    }
+    out.muzik = j.muzik;
   }
   if (tur === 'eller' && j.kolRengi !== undefined) {
     if (typeof j.kolRengi !== 'string' || !COLOR.test(j.kolRengi)) {

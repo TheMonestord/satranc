@@ -9,6 +9,8 @@ function target() {
     applyThemes: vi.fn<SettingsTarget['applyThemes']>(),
     setQuality: vi.fn<SettingsTarget['setQuality']>(),
     setAnimation: vi.fn<SettingsTarget['setAnimation']>(),
+    setMotion: vi.fn<SettingsTarget['setMotion']>(),
+    setAudio: vi.fn<SettingsTarget['setAudio']>(),
   };
 }
 
@@ -49,5 +51,13 @@ describe('applySettingsChange', () => {
     expect(tg.setView).toHaveBeenCalledWith('2d');
     expect(tg.applyThemes).not.toHaveBeenCalled();
     expect(tg.setQuality).not.toHaveBeenCalled();
+  });
+
+  test('hareket modu ve ses değişimi ilgili ayarlayıcıyı çağırır', () => {
+    const tg = target();
+    applySettingsChange(base, { ...base, motion: 'walk', music: true }, tg);
+    expect(tg.setMotion).toHaveBeenCalledWith('walk');
+    expect(tg.setAudio).toHaveBeenCalledWith(base.sound, true);
+    expect(tg.applyThemes).not.toHaveBeenCalled();
   });
 });

@@ -1,3 +1,4 @@
+import { SoundEngine } from './audio/soundEngine';
 import { EngineClient } from './engine/engineClient';
 import { GameManager } from './game/gameManager';
 import { loadGame, loadSettings, saveSettings, DEFAULT_SETTINGS, type Settings } from './game/storage';
@@ -5,6 +6,8 @@ import type { BoardView } from './scene/view';
 import { View2D } from './scene/view2d';
 import { Scene3D } from './scene/view3d/scene3d';
 import { HandAnimator } from './scene/animators/handAnimator';
+import type { MoveAnimator } from './scene/animators/types';
+import { WalkAnimator } from './scene/animators/walkAnimator';
 import { ThemeRegistry } from './themes/registry';
 import { applySettingsChange, type SettingsTarget } from './ui/applySettings';
 import { confirmDialog } from './ui/dialog';
@@ -27,6 +30,7 @@ export class App {
   private can3d = false;
   private view: BoardView | null = null;
   private webglNoticeShown = false;
+  private audio = new SoundEngine();
 
   constructor(private host: HTMLElement) {}
 
@@ -40,6 +44,9 @@ export class App {
     setLang(this.settings.language);
     document.title = t('app.title');
     this.can3d = Scene3D.isSupported();
+    this.audio.setEnabled(this.settings.sound, this.settings.music);
+    // Tarayıcılar sesi ancak ilk dokunuştan sonra açar.
+    window.addEventListener('pointerdown', () => this.audio.unlock(), { once: true });
 
     const loading = document.createElement('div');
     loading.className = 'loading';
@@ -131,9 +138,10 @@ export class App {
     setView: (kind) => this.screen?.setView(this.can3d ? kind : '2d'),
     applyThemes: () => {
       const themes = this.registry.resolve(this.settings.themes);
+      this.audio.setMood(themes.ortam.muzik ?? 'sakin');
       if (this.view instanceof Scene3D) {
         this.view.applyThemes(themes);
-        this.view.setAnimator(new HandAnimator(this.view, themes.eller));
+        this.view.setAnimator(this.createAnimator(this.view));
       } else if (this.view instanceof View2D) {
         this.view.applyTheme(themes.masa);
       }
@@ -141,6 +149,10 @@ export class App {
     setQuality: (quality) => {
       if (this.view instanceof Scene3D) this.view.setQuality(quality);
     },
+    setMotion: () => {
+      if (this.view instanceof Scene3D) this.view.setAnimator(this.createAnimator(this.view));
+    },
+    setAudio: (sound, music) => this.audio.setEnabled(sound, music),
     setAnimation: (animation) => {
       if (this.view instanceof Scene3D) this.view.setAnimationSpeed(ANIMATION_SPEED[animation]);
     },
@@ -164,16 +176,25 @@ export class App {
 
   private createView(kind: ViewKind): BoardView {
     const themes = this.registry.resolve(this.settings.themes);
+    this.audio.setMood(themes.ortam.muzik ?? 'sakin');
     if (kind === '3d' && this.can3d) {
       const scene = new Scene3D(themes, this.settings.quality);
-      scene.setAnimator(new HandAnimator(scene, themes.eller));
+      scene.setAnimator(this.createAnimator(scene));
       scene.setAnimationSpeed(ANIMATION_SPEED[this.settings.animation]);
       scene.onSlowFrames(() => void this.onSlowFrames());
+      scene.onCue((cue) => this.audio.play(cue));
       this.view = scene;
       return scene;
     }
-    this.view = new View2D(themes.masa);
-    return this.view;
+    const flat = new View2D(themes.masa);
+    flat.onCue((cue) => this.audio.play(cue));
+    this.view = flat;
+    return flat;
+  }
+
+  private createAnimator(scene: Scene3D): MoveAnimator {
+    if (this.settings.motion === 'walk') return new WalkAnimator(scene);
+    return new HandAnimator(scene, this.registry.resolve(this.settings.themes).eller);
   }
 
   private updateSettings(next: Settings): void {

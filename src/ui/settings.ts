@@ -69,7 +69,12 @@ export function showSettings(
           { value: 'fast', label: t('settings.animation.fast') },
           { value: 'off', label: t('settings.animation.off') },
         ], (v) => emit({ ...settings, animation: v as Settings['animation'] })),
-        field('motion', t('settings.motion'), 'hands', [{ value: 'hands', label: t('settings.motion.hands') }], () => {}),
+        field('motion', t('settings.motion'), settings.motion, [
+          { value: 'hands', label: t('settings.motion.hands') },
+          { value: 'walk', label: t('settings.motion.walk') },
+        ], (v) => emit({ ...settings, motion: v as Settings['motion'] })),
+        field('sound', t('settings.sound'), settings.sound ? 'on' : 'off', onOff(), (v) => emit({ ...settings, sound: v === 'on' })),
+        field('music', t('settings.music'), settings.music ? 'on' : 'off', onOff(), (v) => emit({ ...settings, music: v === 'on' })),
         document.createElement('hr'),
       );
 
@@ -102,6 +107,13 @@ export function showSettings(
 
     render();
   });
+}
+
+function onOff(): Option[] {
+  return [
+    { value: 'on', label: t('settings.on') },
+    { value: 'off', label: t('settings.off') },
+  ];
 }
 
 function field(name: string, label: string, value: string, options: Option[], onPick: (value: string) => void): HTMLElement {

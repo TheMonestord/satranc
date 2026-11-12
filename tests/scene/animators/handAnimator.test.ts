@@ -58,6 +58,18 @@ function fakeHost(core: ChessCore) {
       pieces.delete(from);
       pieces.set(to, o);
     },
+    detachPiece: (sq) => {
+      const o = pieces.get(sq) ?? null;
+      pieces.delete(sq);
+      return o;
+    },
+    findPiece: (type, color) => {
+      for (const [square, object] of pieces) {
+        if (object.userData.piece === type && object.userData.color === color) return { square, object };
+      }
+      return null;
+    },
+    cue: () => {},
     replacePiece: (sq, type, color) => {
       host.removePiece(sq);
       add(sq, type, color);

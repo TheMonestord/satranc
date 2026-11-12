@@ -8,6 +8,7 @@ import { applyBackground, buildEnvironment, type Quality } from './environment';
 import { findPieceNode, loadThemeModel } from './models';
 import { PIECE_HEIGHTS, buildPiece, fitToHeight } from './pieces';
 import { buildTable, squareToWorld, worldToSquare } from './table';
+import { moveCue, resultCue, type Cue } from '../../audio/cues';
 
 export interface SceneThemes {
   ortam: OrtamTheme;
@@ -63,6 +64,7 @@ export class Scene3D implements BoardView, MoveAnimatorHost {
   private flipAnim: { from: number; to: number; start: number } | null = null;
   private highlights: Highlights = { targets: [] };
   private clickCb: (sq: Square) => void = () => {};
+  private cueCb: (cue: Cue) => void = () => {};
   private pointerDown: { x: number; y: number } | null = null;
   private frameHandle = 0;
   private disposed = false;
@@ -126,10 +128,11 @@ export class Scene3D implements BoardView, MoveAnimatorHost {
   setPosition(pieces: PieceOnBoard[]): void {
     // Dışarıdan gelen konum (geri alma, yeni oyun) bekleyen hamle canlandırmasının sonucunu geçersiz kılar.
     this.epoch++;
-    this.syncPosition(pieces);
+    this.syncPosition(pieces, true);
   }
 
-  private syncPosition(pieces: PieceOnBoard[]): void {
+  /** `resetPose`: taşların eğilme, devrilme ve ölçek gibi canlandırma artıklarını da sıfırlar. */
+  private syncPosition(pieces: PieceOnBoard[], resetPose: boolean): void {
     this.animator?.finishNow();
     const wanted = new Map(pieces.map((p) => [p.square, p]));
     for (const [sq, obj] of [...this.pieces]) {
@@ -141,6 +144,10 @@ export class Scene3D implements BoardView, MoveAnimatorHost {
       if (existing) {
         // Yarım kalmış bir canlandırmadan kalan kaymayı düzelt.
         existing.position.copy(squareToWorld(p.square));
+        if (resetPose) {
+          existing.rotation.set(0, p.color === 'w' ? 0 : Math.PI, 0);
+          existing.scale.set(1, 1, 1);
+        }
       } else {
         this.addPiece(p.square, p.piece, p.color);
       }
@@ -164,8 +171,14 @@ export class Scene3D implements BoardView, MoveAnimatorHost {
           if (mustWait) await new Promise<void>((r) => setTimeout(r, MOVE_GAP_MS / this.speed));
           if (epoch !== this.epoch || this.disposed) return;
           await this.animator.play(ev, this.speed);
+        } else {
+          this.cue(moveCue(ev));
         }
-        if (epoch === this.epoch && !this.disposed) this.syncPosition(piecesAfter);
+        if (epoch !== this.epoch || this.disposed) return;
+        // Duruşlar sıfırlanmaz: mat olan şah devrik kalır.
+        this.syncPosition(piecesAfter, false);
+        const after = resultCue(ev);
+        if (after) this.cue(after);
       } finally {
         this.queuedMoves--;
       }
@@ -249,6 +262,28 @@ export class Scene3D implements BoardView, MoveAnimatorHost {
     if (!obj) return;
     this.pieces.delete(from);
     this.pieces.set(to, obj);
+  }
+
+  detachPiece(sq: Square): THREE.Object3D | null {
+    const obj = this.pieces.get(sq) ?? null;
+    this.pieces.delete(sq);
+    return obj;
+  }
+
+  findPiece(type: PieceType, color: Color): { square: Square; object: THREE.Object3D } | null {
+    for (const [square, object] of this.pieces) {
+      if (object.userData.piece === type && object.userData.color === color) return { square, object };
+    }
+    return null;
+  }
+
+  cue(cue: Cue): void {
+    this.cueCb(cue);
+  }
+
+  /** Ses anlarını dinler (taş kondu, taş alındı, şah…). */
+  onCue(cb: (cue: Cue) => void): void {
+    this.cueCb = cb;
   }
 
   replacePiece(sq: Square, type: PieceType, color: Color): void {

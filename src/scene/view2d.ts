@@ -1,3 +1,4 @@
+import { moveCue, resultCue, type Cue } from '../audio/cues';
 import type { Color, MoveEvent, PieceOnBoard, PieceType, Square } from '../core/types';
 import { FILES } from '../core/types';
 import type { MasaTheme } from '../themes/types';
@@ -12,6 +13,7 @@ const HIGHLIGHT_CLASSES = ['selected', 'target', 'last', 'check'];
 
 /** Düz tahta. WebGL olmayan cihazlarda ve oyuncu istediğinde kullanılır. */
 export class View2D implements BoardView {
+  private cueCb: (cue: Cue) => void = () => {};
   private board = document.createElement('div');
   private squares = new Map<Square, HTMLButtonElement>();
   private pieces: PieceOnBoard[] = [];
@@ -50,9 +52,17 @@ export class View2D implements BoardView {
     }
   }
 
-  applyMove(_ev: MoveEvent, piecesAfter: PieceOnBoard[]): Promise<void> {
+  applyMove(ev: MoveEvent, piecesAfter: PieceOnBoard[]): Promise<void> {
     this.setPosition(piecesAfter);
+    this.cueCb(moveCue(ev));
+    const after = resultCue(ev);
+    if (after) this.cueCb(after);
     return Promise.resolve();
+  }
+
+  /** Ses anlarını dinler. */
+  onCue(cb: (cue: Cue) => void): void {
+    this.cueCb = cb;
   }
 
   setHighlights(h: Highlights): void {

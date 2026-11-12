@@ -1,0 +1,13 @@
+{
+  "id": "gun-isigi",
+  "tur": "ortam",
+  "ad": {
+    "tr": "Gün Işığı",
+    "en": "Daylight"
+  },
+  "arkaPlan": "#cfdcea",
+  "zemin": "#b9a98f",
+  "isikRengi": "#ffffff",
+  "isikSiddeti": 3.0,
+  "muzik": "gunduz"
+}
