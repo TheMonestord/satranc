@@ -1,0 +1,14 @@
+{
+  "id": "sorgu-odasi",
+  "tur": "ortam",
+  "ad": {
+    "tr": "Sorgu Odası",
+    "en": "Interrogation Room"
+  },
+  "arkaPlan": "#07080a",
+  "zemin": "#2a2b2c",
+  "isikRengi": "#ffd9a0",
+  "isikSiddeti": 2.4,
+  "muzik": "gece",
+  "oda": "sorgu"
+}

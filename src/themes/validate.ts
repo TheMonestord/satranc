@@ -1,4 +1,4 @@
-import { MUSIC_MOODS, type MusicMood, type Theme, type ThemeSlot } from './types';
+import { MUSIC_MOODS, ROOM_KINDS, type MusicMood, type RoomKind, type Theme, type ThemeSlot } from './types';
 
 type Result = { ok: true; theme: Theme } | { ok: false; error: string };
 
@@ -56,6 +56,12 @@ export function validateManifest(json: unknown, baseUrl: string): Result {
       return { ok: false, error: `muzik: ${MUSIC_MOODS.join(', ')} değerlerinden biri olmalı` };
     }
     out.muzik = j.muzik;
+  }
+  if (tur === 'ortam' && j.oda !== undefined) {
+    if (!ROOM_KINDS.includes(j.oda as RoomKind)) {
+      return { ok: false, error: `oda: ${ROOM_KINDS.join(', ')} değerlerinden biri olmalı` };
+    }
+    out.oda = j.oda;
   }
   if (tur === 'eller' && j.kolRengi !== undefined) {
     if (typeof j.kolRengi !== 'string' || !COLOR.test(j.kolRengi)) {

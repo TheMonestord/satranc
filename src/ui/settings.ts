@@ -59,6 +59,10 @@ export function showSettings(
         box.append(note);
       }
       box.append(
+        field('camera', t('settings.camera'), settings.camera, [
+          { value: 'masa', label: t('settings.camera.masa') },
+          { value: 'kus', label: t('settings.camera.kus') },
+        ], (v) => emit({ ...settings, camera: v as Settings['camera'] })),
         field('quality', t('settings.quality'), settings.quality, [
           { value: 'low', label: t('settings.quality.low') },
           { value: 'medium', label: t('settings.quality.medium') },

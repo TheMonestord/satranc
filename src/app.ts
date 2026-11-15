@@ -5,7 +5,8 @@ import { loadGame, loadSettings, saveSettings, DEFAULT_SETTINGS, type Settings }
 import type { BoardView } from './scene/view';
 import { View2D } from './scene/view2d';
 import { Scene3D } from './scene/view3d/scene3d';
-import { HandAnimator } from './scene/animators/handAnimator';
+import { HandAnimator, type HandSlot } from './scene/animators/handAnimator';
+import { DEFAULT_CHARACTER_ID, createCharacter, createPlayerArm, type Character } from './scene/view3d/characters';
 import type { MoveAnimator } from './scene/animators/types';
 import { WalkAnimator } from './scene/animators/walkAnimator';
 import { ThemeRegistry } from './themes/registry';
@@ -75,6 +76,8 @@ export class App {
   private async showMenu(): Promise<void> {
     this.screen?.dispose();
     this.screen = null;
+    // Menüde ayar değişince atılmış sahneye dokunulmasın.
+    this.view = null;
     const saved = await loadGame();
     const canResume = saved !== null && (saved.mode === 'local' || this.aiAvailable);
     const lang = this.settings.language;
@@ -151,7 +154,7 @@ export class App {
       this.audio.setMood(themes.ortam.muzik ?? 'sakin');
       if (this.view instanceof Scene3D) {
         this.view.applyThemes(themes);
-        this.view.setAnimator(this.createAnimator(this.view));
+        this.setupActors(this.view);
       } else if (this.view instanceof View2D) {
         this.view.applyTheme(themes.masa);
       }
@@ -160,9 +163,15 @@ export class App {
       if (this.view instanceof Scene3D) this.view.setQuality(quality);
     },
     setMotion: () => {
-      if (this.view instanceof Scene3D) this.view.setAnimator(this.createAnimator(this.view));
+      if (this.view instanceof Scene3D) this.setupActors(this.view);
     },
     setAudio: (sound, music) => this.audio.setEnabled(sound, music),
+    setCamera: (camera) => {
+      if (this.view instanceof Scene3D) {
+        this.view.setCameraMode(camera);
+        this.setupActors(this.view);
+      }
+    },
     setAnimation: (animation) => {
       if (this.view instanceof Scene3D) this.view.setAnimationSpeed(ANIMATION_SPEED[animation]);
     },
@@ -189,7 +198,8 @@ export class App {
     this.audio.setMood(themes.ortam.muzik ?? 'sakin');
     if (kind === '3d' && this.can3d) {
       const scene = new Scene3D(themes, this.settings.quality);
-      scene.setAnimator(this.createAnimator(scene));
+      scene.setCameraMode(this.settings.camera);
+      this.setupActors(scene);
       scene.setAnimationSpeed(ANIMATION_SPEED[this.settings.animation]);
       scene.onSlowFrames(() => void this.onSlowFrames());
       scene.onCue((cue) => this.audio.play(cue));
@@ -202,9 +212,34 @@ export class App {
     return flat;
   }
 
-  private createAnimator(scene: Scene3D): MoveAnimator {
+  /**
+   * Karakterleri ve hareket modunu birlikte kurar. Bilgisayara karşı oyunda karşıya rakip oturur;
+   * masa başı kamerada ve eller modunda oyuncunun hamlelerini kendi kolu yapar.
+   */
+  private setupActors(scene: Scene3D): void {
+    scene.setAnimator(null);
+    const cfg = this.gm.state().config;
+    const eller = this.registry.resolve(this.settings.themes).eller;
+    const opponent = cfg.mode === 'ai' ? createCharacter(DEFAULT_CHARACTER_ID) : null;
+    const arm =
+      cfg.mode === 'ai' && this.settings.camera === 'masa' && this.settings.motion === 'hands' ? createPlayerArm(eller) : null;
+    scene.setPlayerColor(cfg.mode === 'ai' ? cfg.playerColor : 'w');
+    scene.setCharacters(opponent, arm);
+    scene.setAnimator(this.createAnimator(scene, opponent, arm));
+  }
+
+  private createAnimator(scene: Scene3D, opponent: Character | null, arm: Character | null): MoveAnimator {
     if (this.settings.motion === 'walk') return new WalkAnimator(scene);
-    return new HandAnimator(scene, this.registry.resolve(this.settings.themes).eller);
+    const slot = (c: Character): HandSlot => ({
+      hand: c.hand,
+      rest: () => c.restPoint(),
+      setBusy: (b) => c.setHandBusy(b),
+    });
+    const player = this.gm.state().config.playerColor;
+    const slots: Partial<Record<'w' | 'b', HandSlot>> = {};
+    if (opponent) slots[player === 'w' ? 'b' : 'w'] = slot(opponent);
+    if (arm) slots[player] = slot(arm);
+    return new HandAnimator(scene, this.registry.resolve(this.settings.themes).eller, undefined, slots);
   }
 
   private updateSettings(next: Settings): void {

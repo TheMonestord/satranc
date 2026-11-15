@@ -9,6 +9,10 @@ import { findPieceNode, loadThemeModel } from './models';
 import { PIECE_HEIGHTS, buildPiece, fitToHeight } from './pieces';
 import { buildTable, squareToWorld, worldToSquare } from './table';
 import { moveCue, resultCue, type Cue } from '../../audio/cues';
+import type { ClockSnapshot } from '../../game/clock';
+import type { RoomTick } from './room';
+import { TableClock } from './tableClock';
+import type { Character, CharacterEvent } from './characters/types';
 
 export interface SceneThemes {
   ortam: OrtamTheme;
@@ -18,6 +22,17 @@ export interface SceneThemes {
 
 const POLAR = THREE.MathUtils.degToRad(42);
 const FOV = 38;
+/** Kamera türü: masada oturan oyuncunun gözü ya da tahtanın üstünden dönen kuşbakışı. */
+export type CameraMode = 'masa' | 'kus';
+/** Masa başı görünümde oyuncunun gözü (beyaz taraftan) ve baktığı nokta. */
+export const EYE = new THREE.Vector3(0, 12.5, 11.5);
+export const EYE_TARGET = new THREE.Vector3(0, 1.6, -3);
+const EYE_FOV = 50;
+const LOOK_YAW_MAX = THREE.MathUtils.degToRad(40);
+const LOOK_PITCH_MIN = THREE.MathUtils.degToRad(-25);
+const LOOK_PITCH_MAX = THREE.MathUtils.degToRad(22);
+/** Karşıdaki rakibin oturduğu yer (tahta merkezinden uzaklık). */
+export const OPPONENT_SEAT_Z = 11.2;
 const FLIP_MS = 600;
 const CLICK_SLOP_PX = 7;
 /** Art arda gelen iki hamlenin canlandırmaları arasındaki duraklama (normal hızda, ms). */
@@ -30,9 +45,17 @@ function disposeObject(obj: THREE.Object3D): void {
     if (!mesh.isMesh) return;
     mesh.geometry?.dispose();
     const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-    for (const m of mats) m?.dispose();
+    for (const m of mats) {
+      if (!m) continue;
+      // Kodla üretilen dokular (oda duvarları, zemin) malzemeyle birlikte atılır.
+      for (const value of Object.values(m)) if (value instanceof THREE.Texture) value.dispose();
+      m.dispose();
+    }
   });
 }
+
+/** Yalnızca oda ve karakterler canlıyken (hamle, dönüş yokken) saniyedeki en çok kare. */
+const IDLE_FPS = { low: 20, medium: 30, high: 40 } as const;
 
 /** Three.js sahnesi. Oyun kurallarını bilmez; yalnızca verilen konumu ve hamle olaylarını gösterir. */
 export class Scene3D implements BoardView, MoveAnimatorHost {
@@ -71,6 +94,20 @@ export class Scene3D implements BoardView, MoveAnimatorHost {
   /** Tema değişimlerinde eski model yüklemelerinin sonucunu yok saymak için. */
   private themeToken = 0;
   private slowCb: (() => void) | null = null;
+  private cameraMode: CameraMode = 'masa';
+  /** Masa başı görünümde fareyle bakınma (radyan). */
+  private look = { yaw: 0, pitch: 0, zoom: 0 };
+  private dragLook: { x: number; y: number; yaw: number; pitch: number } | null = null;
+  private tableClock = new TableClock();
+  private opponent: Character | null = null;
+  private playerArm: Character | null = null;
+  private lastTickAt = 0;
+  private lastDrawAt = 0;
+  /** Bir canlandırma veya etkileşim kare istedi; bu kare sınırlanmadan çizilir. */
+  private urgent = false;
+  /** Oyuncunun rengi: karakterler ve masa saati buna göre oturur (görünümün çevrilmesine göre değil). */
+  private playerColor: Color = 'w';
+  private lookTarget: THREE.Vector3 | null = null;
   private frameTimes: number[] = [];
   private measureUntil = 0;
 
@@ -82,7 +119,7 @@ export class Scene3D implements BoardView, MoveAnimatorHost {
     this.tableGroup = buildTable(themes.masa);
     applyBackground(this.scene, themes.ortam);
     this.pieceGroup.name = 'taslar';
-    this.scene.add(this.envGroup, this.tableGroup, this.pieceGroup, this.highlightGroup);
+    this.scene.add(this.envGroup, this.tableGroup, this.pieceGroup, this.highlightGroup, this.tableClock.group);
     void this.loadModels();
   }
 
@@ -112,10 +149,13 @@ export class Scene3D implements BoardView, MoveAnimatorHost {
     controls.minPolarAngle = THREE.MathUtils.degToRad(15);
     controls.maxPolarAngle = THREE.MathUtils.degToRad(80);
     controls.addEventListener('change', () => this.requestRender());
+    controls.enabled = this.cameraMode === 'kus';
     this.controls = controls;
 
     renderer.domElement.addEventListener('pointerdown', this.onPointerDown);
     renderer.domElement.addEventListener('pointerup', this.onPointerUp);
+    renderer.domElement.addEventListener('pointermove', this.onPointerMove);
+    renderer.domElement.addEventListener('wheel', this.onWheel, { passive: false });
 
     this.resizeObserver = new ResizeObserver(() => this.resize());
     this.resizeObserver.observe(el);
@@ -194,6 +234,8 @@ export class Scene3D implements BoardView, MoveAnimatorHost {
   }
 
   setFlipped(flipped: boolean): void {
+    // Masa başında karşıda biri otururken oyuncu kendi sandalyesinden kalkmaz: görünüm oyuncunun tarafında kalır.
+    if (this.cameraMode === 'masa' && this.opponent) flipped = this.playerColor === 'b';
     if (flipped === this.flipped) return;
     this.flipped = flipped;
     const to = flipped ? Math.PI : 0;
@@ -220,10 +262,16 @@ export class Scene3D implements BoardView, MoveAnimatorHost {
     if (this.renderer) {
       this.renderer.domElement.removeEventListener('pointerdown', this.onPointerDown);
       this.renderer.domElement.removeEventListener('pointerup', this.onPointerUp);
+      this.renderer.domElement.removeEventListener('pointermove', this.onPointerMove);
+      this.renderer.domElement.removeEventListener('wheel', this.onWheel);
       this.renderer.domElement.remove();
       this.renderer.dispose();
       this.renderer = null;
     }
+    this.opponent?.dispose();
+    this.playerArm?.dispose();
+    this.opponent = this.playerArm = null;
+    this.tableClock.dispose();
     disposeObject(this.scene);
     for (const proto of this.prototypes.values()) disposeObject(proto);
     this.prototypes.clear();
@@ -292,6 +340,12 @@ export class Scene3D implements BoardView, MoveAnimatorHost {
   }
 
   requestRender(): void {
+    this.urgent = true;
+    this.scheduleFrame();
+  }
+
+  /** Bekleyen bir kare isteği yoksa bir sonraki kareyi ister. */
+  private scheduleFrame(): void {
     if (this.frameHandle || this.disposed || !this.renderer) return;
     this.frameHandle = requestAnimationFrame((now) => {
       this.frameHandle = 0;
@@ -430,6 +484,17 @@ export class Scene3D implements BoardView, MoveAnimatorHost {
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
 
+    if (this.cameraMode === 'masa') {
+      // Tahtanın genişliği görünsün: dar ekranlarda görüş açısı genişler.
+      const needH = Math.atan(5.6 / 11.5);
+      const needV = 2 * Math.atan(Math.tan(needH) / this.camera.aspect);
+      this.camera.fov = THREE.MathUtils.clamp(THREE.MathUtils.radToDeg(needV), EYE_FOV, 82);
+      this.camera.updateProjectionMatrix();
+      this.placeCamera();
+      this.placeCharacters();
+      this.requestRender();
+      return;
+    }
     // Tahtanın tamamı görünecek uzaklık: dar ekranlarda kamera geri çekilir.
     const vHalf = THREE.MathUtils.degToRad(FOV / 2);
     const hHalf = Math.atan(Math.tan(vHalf) * this.camera.aspect);
@@ -450,6 +515,20 @@ export class Scene3D implements BoardView, MoveAnimatorHost {
 
   private placeCamera(azimuth = this.flipped ? Math.PI : 0): void {
     this.azimuth = azimuth;
+    if (this.cameraMode === 'masa') {
+      const up = new THREE.Vector3(0, 1, 0);
+      const eye = EYE.clone().applyAxisAngle(up, azimuth);
+      const target = EYE_TARGET.clone().applyAxisAngle(up, azimuth);
+      // Öne eğilme (tekerlek): göz hedefe doğru biraz yaklaşır.
+      eye.lerp(target, this.look.zoom * 0.35);
+      const dir = target.sub(eye).normalize();
+      dir.applyAxisAngle(up, this.look.yaw);
+      const side = new THREE.Vector3().crossVectors(dir, up).normalize();
+      dir.applyAxisAngle(side, this.look.pitch);
+      this.camera.position.copy(eye);
+      this.camera.lookAt(eye.clone().add(dir));
+      return;
+    }
     const r = this.distance;
     this.camera.position.set(
       r * Math.sin(POLAR) * Math.sin(azimuth),
@@ -474,8 +553,148 @@ export class Scene3D implements BoardView, MoveAnimatorHost {
       if (k >= 1) this.flipAnim = null;
       else this.requestRender();
     }
+    const urgent = this.urgent || this.flipAnim !== null;
+    this.urgent = false;
+    // Yalnızca boşta canlanma (lamba, nefes alan karakter) varsa kare hızı sınırlanır: pil ve işlemci için.
+    if (!urgent && now - this.lastDrawAt < 1000 / IDLE_FPS[this.quality]) {
+      this.scheduleFrame();
+      return;
+    }
+    this.lastDrawAt = now;
+    const living = this.tickLiving(now);
     this.renderer.render(this.scene, this.camera);
     this.measure(now);
+    if (living) this.scheduleFrame();
+  }
+
+  /** Oda, saat ve karakterler gibi sürekli canlanan parçaları ilerletir; varsa true döner. */
+  private tickLiving(now: number): boolean {
+    const dt = this.lastTickAt ? Math.min(0.1, (now - this.lastTickAt) / 1000) : 0;
+    this.lastTickAt = now;
+    let living = false;
+    const roomTick = this.envGroup.userData.tick as RoomTick | undefined;
+    if (roomTick) {
+      roomTick(now);
+      living = true;
+    }
+    if (this.tableClock.update(dt)) living = true;
+    for (const c of [this.opponent, this.playerArm]) {
+      if (!c) continue;
+      c.update(dt, now / 1000);
+      living = true;
+    }
+    return living;
+  }
+
+  // ---------- Masa başı: kamera, saat ve karakterler ----------
+
+  setCameraMode(mode: CameraMode): void {
+    if (mode === this.cameraMode) return;
+    this.cameraMode = mode;
+    this.look = { yaw: 0, pitch: 0, zoom: 0 };
+    if (mode === 'masa' && this.opponent) {
+      this.flipped = this.playerColor === 'b';
+      this.flipAnim = null;
+    }
+    if (this.controls) this.controls.enabled = mode === 'kus';
+    if (mode === 'kus') {
+      this.camera.fov = FOV;
+      this.camera.updateProjectionMatrix();
+      this.distance = 0;
+    }
+    this.resize();
+    this.placeCamera();
+    this.requestRender();
+  }
+
+  getCameraMode(): CameraMode {
+    return this.cameraMode;
+  }
+
+  /** Masadaki saatin göstereceği süreler; null süresiz oyundur. */
+  setClock(snap: ClockSnapshot | null): void {
+    this.tableClock.setSnapshot(snap);
+    this.requestRender();
+  }
+
+  setClockFrozen(frozen: boolean): void {
+    this.tableClock.setFrozen(frozen);
+    this.requestRender();
+  }
+
+  /**
+   * Karşıdaki rakibi ve oyuncunun kolunu yerleştirir. Eskiler kaldırılıp atılır.
+   * Karakterlerin elleri sahneye doğrudan eklenir; hamle canlandırması onları dünya koordinatında taşır.
+   */
+  setCharacters(opponent: Character | null, playerArm: Character | null): void {
+    for (const c of [this.opponent, this.playerArm]) {
+      if (!c || c === opponent || c === playerArm) continue;
+      this.scene.remove(c.root, c.hand.root);
+      c.dispose();
+    }
+    this.opponent = opponent;
+    this.playerArm = playerArm;
+    for (const c of [opponent, playerArm]) {
+      if (!c) continue;
+      this.scene.add(c.root, c.hand.root);
+    }
+    this.placeCharacters();
+    this.requestRender();
+  }
+
+  characters(): { opponent: Character | null; player: Character | null } {
+    return { opponent: this.opponent, player: this.playerArm };
+  }
+
+  characterEvent(ev: CharacterEvent): void {
+    this.opponent?.react(ev);
+    this.requestRender();
+  }
+
+  lookAtSquare(sq: Square | null): void {
+    if (!sq) {
+      this.setLookTarget(null);
+      return;
+    }
+    const piece = this.pieces.get(sq);
+    const h = piece ? PIECE_HEIGHTS[piece.userData.piece as PieceType] * 0.6 : 0;
+    this.setLookTarget(squareToWorld(sq).setY(h));
+  }
+
+  /** Rakibin bakacağı nokta (ör. oyuncunun seçtiği taş). */
+  setLookTarget(p: THREE.Vector3 | null): void {
+    this.lookTarget = p;
+    this.opponent?.lookAt(p);
+  }
+
+  /** Oyuncunun rengi; rakip karşı renge, saat oyuncunun sağına oturur. */
+  setPlayerColor(color: Color): void {
+    this.playerColor = color;
+    this.tableClock.setFlipped(color === 'b');
+    this.placeCharacters();
+    this.requestRender();
+  }
+
+  private placeCharacters(): void {
+    // Rakip oyuncunun karşısına oturur: oyuncu beyazsa siyah tarafta (-z).
+    const black = this.playerColor === 'b';
+    const side = black ? 1 : -1;
+    if (this.opponent) {
+      this.opponent.root.position.set(0, 0, side * OPPONENT_SEAT_Z);
+      this.opponent.root.rotation.set(0, side < 0 ? 0 : Math.PI, 0);
+      this.opponent.root.updateMatrixWorld(true);
+      this.opponent.hand.root.position.copy(this.opponent.restPoint());
+      this.opponent.lookAt(this.lookTarget);
+    }
+    if (this.playerArm) {
+      this.playerArm.root.position.set(0, 0, 0);
+      this.playerArm.root.rotation.set(0, black ? Math.PI : 0, 0);
+      // Kol, ekranın sağ altından girecek biçimde kameraya göre yerleşir (beyaz taraftan tanımlanır).
+      const arm = this.playerArm as Character & { configure?(eye: THREE.Vector3, target: THREE.Vector3, fov?: number, aspect?: number): void };
+      arm.configure?.(EYE, EYE_TARGET, this.camera.fov, this.camera.aspect);
+      this.playerArm.root.updateMatrixWorld(true);
+      this.playerArm.hand.root.position.copy(this.playerArm.restPoint());
+    }
   }
 
   private lastFrameAt = 0;
@@ -493,11 +712,38 @@ export class Scene3D implements BoardView, MoveAnimatorHost {
 
   private onPointerDown = (e: PointerEvent): void => {
     this.pointerDown = { x: e.clientX, y: e.clientY };
+    if (this.cameraMode === 'masa') this.dragLook = { x: e.clientX, y: e.clientY, yaw: this.look.yaw, pitch: this.look.pitch };
+  };
+
+  /** Masa başı görünümde sürüklemek başı çevirir (sınırlı). */
+  private onPointerMove = (e: PointerEvent): void => {
+    const d = this.dragLook;
+    if (!d || this.cameraMode !== 'masa' || !this.host) return;
+    if (e.buttons === 0) {
+      this.dragLook = null;
+      return;
+    }
+    const h = Math.max(1, this.host.clientHeight);
+    const per = THREE.MathUtils.degToRad(this.camera.fov) / h;
+    this.look.yaw = THREE.MathUtils.clamp(d.yaw - (e.clientX - d.x) * per, -LOOK_YAW_MAX, LOOK_YAW_MAX);
+    this.look.pitch = THREE.MathUtils.clamp(d.pitch - (e.clientY - d.y) * per, LOOK_PITCH_MIN, LOOK_PITCH_MAX);
+    if (!this.flipAnim) this.placeCamera();
+    this.requestRender();
+  };
+
+  /** Tekerlek: tahtaya doğru öne eğilme. */
+  private onWheel = (e: WheelEvent): void => {
+    if (this.cameraMode !== 'masa') return;
+    e.preventDefault();
+    this.look.zoom = THREE.MathUtils.clamp(this.look.zoom - Math.sign(e.deltaY) * 0.12, 0, 1);
+    if (!this.flipAnim) this.placeCamera();
+    this.requestRender();
   };
 
   private onPointerUp = (e: PointerEvent): void => {
     const down = this.pointerDown;
     this.pointerDown = null;
+    this.dragLook = null;
     if (!down) return;
     // Sürükleme kamerayı döndürür; yalnızca yerinde bırakılan dokunuş tıklama sayılır.
     if (Math.hypot(e.clientX - down.x, e.clientY - down.y) > CLICK_SLOP_PX) return;
@@ -529,20 +775,34 @@ export class Scene3D implements BoardView, MoveAnimatorHost {
     );
     this.raycaster.setFromCamera(ndc, this.camera);
 
+    const point = new THREE.Vector3();
+    const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+    const planeSq = this.raycaster.ray.intersectPlane(plane, point) ? worldToSquare(point) : null;
+
     // Önce taşlar: uzun bir taşın gövdesine tıklamak arkasındaki kareyi seçmemeli.
     const hit = this.raycaster.intersectObjects(this.pieceGroup.children, true)[0];
+    let pieceSq: Square | null = null;
     if (hit) {
       for (const [sq, obj] of this.pieces) {
         let o: THREE.Object3D | null = hit.object;
-        while (o) {
-          if (o === obj) return sq;
+        while (o && !pieceSq) {
+          if (o === obj) pieceSq = sq;
           o = o.parent;
         }
+        if (pieceSq) break;
       }
     }
-    const point = new THREE.Vector3();
-    const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
-    return this.raycaster.ray.intersectPlane(plane, point) ? worldToSquare(point) : null;
+    // Masa başından alçak açıyla bakınca öndeki taş arkadaki kareyi örter. Seçili taşın gidebileceği
+    // bir kareye tıklandıysa ve örten taş hedef değilse, kare kazanır.
+    // Tıklanan taş seçili taşla aynı renkteyse oyuncu taş değiştirmek istiyordur: taş kazanır.
+    const targets = this.highlights.targets;
+    const selected = this.highlights.selected ? this.pieces.get(this.highlights.selected) : undefined;
+    const hitPiece = pieceSq ? this.pieces.get(pieceSq) : undefined;
+    const ownPiece = !!selected && !!hitPiece && selected.userData.color === hitPiece.userData.color;
+    if (pieceSq && planeSq && planeSq !== pieceSq && !ownPiece && targets.includes(planeSq) && !targets.includes(pieceSq)) {
+      return planeSq;
+    }
+    return pieceSq ?? planeSq;
   }
 
   private renderHighlights(): void {

@@ -50,12 +50,13 @@ describe('showSettings', () => {
   const open = (current: Settings = DEFAULT_SETTINGS, can3d = true) =>
     showSettings(document.body, current, registry, (next) => changes.push(next), { can3d });
 
-  test('dil, kalite, animasyon, görünüm, hareket modu ve dört tema yuvasını listeler', () => {
+  test('dil, görünüm, kamera, kalite, animasyon, hareket modu ve dört tema yuvasını listeler', () => {
     open();
     const names = [...document.querySelectorAll<HTMLSelectElement>('select[data-setting]')].map((s) => s.dataset.setting);
     expect(names).toEqual([
       'language',
       'view',
+      'camera',
       'quality',
       'animation',
       'motion',

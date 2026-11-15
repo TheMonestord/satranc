@@ -126,9 +126,12 @@ test('yürüyen taşlar modu: taşlar kendi yürür, taş alma ve hamle listesi 
 });
 
 test('saatli oyun ve geçmiş: süre akar, pes edilen oyun geçmişte görünür', async ({ page }) => {
+  // Süre ölçümü yazılımsal 3D çizimin yavaşlığından etkilenmesin diye oyun 2D görünümde başlar.
+  await page.click('[data-menu="settings"]');
+  await page.selectOption('[data-setting="view"]', '2d');
+  await page.click('[data-settings="close"]');
   await startLocal(page, '3+2');
   await expect(page.locator('[data-clock="w"]')).toContainText('3:00');
-  await page.click('[data-action="view"]');
   await click2d(page, 'e2');
   await click2d(page, 'e4');
   await expect(page.locator('[data-clock="b"]')).toHaveClass(/active/);

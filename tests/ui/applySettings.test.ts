@@ -11,6 +11,7 @@ function target() {
     setAnimation: vi.fn<SettingsTarget['setAnimation']>(),
     setMotion: vi.fn<SettingsTarget['setMotion']>(),
     setAudio: vi.fn<SettingsTarget['setAudio']>(),
+    setCamera: vi.fn<SettingsTarget['setCamera']>(),
   };
 }
 
@@ -58,6 +59,14 @@ describe('applySettingsChange', () => {
     applySettingsChange(base, { ...base, motion: 'walk', music: true }, tg);
     expect(tg.setMotion).toHaveBeenCalledWith('walk');
     expect(tg.setAudio).toHaveBeenCalledWith(base.sound, true);
+    expect(tg.applyThemes).not.toHaveBeenCalled();
+  });
+
+  test('kamera değişimi yalnızca setCamera çağırır', () => {
+    const tg = target();
+    applySettingsChange(base, { ...base, camera: 'kus' }, tg);
+    expect(tg.setCamera).toHaveBeenCalledWith('kus');
+    expect(tg.setView).not.toHaveBeenCalled();
     expect(tg.applyThemes).not.toHaveBeenCalled();
   });
 });

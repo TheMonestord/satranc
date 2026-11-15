@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { MoveEvent, PieceType, Square } from '../../core/types';
+import type { Color, MoveEvent, PieceType, Square } from '../../core/types';
 import type { EllerTheme } from '../../themes/types';
 import { buildHand, type Hand } from '../view3d/hand';
 import { PIECE_HEIGHTS } from '../view3d/pieces';
@@ -36,7 +36,17 @@ const T = HAND_TIMINGS;
 const LIFT = 1.2;
 const REST_Y = 2.5;
 const REST_Z = 6;
-const SIDE_X = 5.5;
+const SIDE_X = 6;
+
+/**
+ * Bir karaktere bağlı el: el sahnede hep durur, hamleden sonra karakterin dinlenme noktasına döner.
+ * Elin yönünü karakter belirler; canlandırma yalnızca konumu değiştirir.
+ */
+export interface HandSlot {
+  hand: Hand;
+  rest(): THREE.Vector3;
+  setBusy(busy: boolean): void;
+}
 
 interface Phase {
   duration: number;
@@ -64,7 +74,10 @@ const ease = (k: number) => k * k * (3 - 2 * k);
 
 /** Eller modu: bir el taşı kavrar, kaldırır ve hedef kareye koyar. */
 export class HandAnimator implements MoveAnimator {
+  /** Bağımsız (karaktersiz) el; karakter eli olmayan renk için kullanılır. */
+  private looseHand: Hand;
   private hand: Hand;
+  private slot: HandSlot | null = null;
   private running: {
     segments: Segment[];
     actions: Action[];
@@ -78,19 +91,31 @@ export class HandAnimator implements MoveAnimator {
     private host: MoveAnimatorHost,
     eller: EllerTheme,
     private clock: AnimationClock = REAL_CLOCK,
+    private slots: Partial<Record<Color, HandSlot>> = {},
   ) {
-    this.hand = buildHand(eller);
+    this.looseHand = buildHand(eller);
+    this.hand = this.looseHand;
   }
 
   play(ev: MoveEvent, speed: number): Promise<void> {
     this.finishNow();
     return new Promise<void>((resolve) => {
       const side = ev.color === 'w' ? 1 : -1;
-      const rest = new THREE.Vector3(squareToWorld(ev.to).x * 0.4, REST_Y, side * REST_Z);
-      this.hand.root.position.copy(rest);
-      this.hand.root.rotation.y = ev.color === 'w' ? 0 : Math.PI;
+      this.slot = this.slots[ev.color] ?? null;
+      let rest: THREE.Vector3;
+      if (this.slot) {
+        this.hand = this.slot.hand;
+        rest = this.slot.rest();
+        this.hand.root.position.copy(rest);
+        this.slot.setBusy(true);
+      } else {
+        this.hand = this.looseHand;
+        rest = new THREE.Vector3(squareToWorld(ev.to).x * 0.4, REST_Y, side * REST_Z);
+        this.hand.root.position.copy(rest);
+        this.hand.root.rotation.y = ev.color === 'w' ? 0 : Math.PI;
+        this.host.scene.add(this.hand.root);
+      }
       this.hand.setGrip(0);
-      this.host.scene.add(this.hand.root);
 
       const steps = planHandSteps(ev);
       const actions = steps.map((s) => this.buildAction(s, side));
@@ -128,14 +153,23 @@ export class HandAnimator implements MoveAnimator {
         action.complete();
       }
     }
-    this.host.scene.remove(this.hand.root);
+    if (this.slot) {
+      // Karakterin eli sahnede kalır; yarıda kesildiyse dinlenme noktasına anında döner.
+      this.hand.root.position.copy(this.slot.rest());
+      this.hand.setGrip(0);
+      this.slot.setBusy(false);
+      this.slot = null;
+    } else {
+      this.host.scene.remove(this.hand.root);
+    }
     this.host.requestRender();
     run.resolve();
   }
 
   dispose(): void {
     this.finishNow();
-    this.hand.root.traverse((o) => {
+    // Karakter elleri karaktere aittir; yalnızca bağımsız el atılır.
+    this.looseHand.root.traverse((o) => {
       const mesh = o as THREE.Mesh;
       if (!mesh.isMesh) return;
       mesh.geometry.dispose();
@@ -256,8 +290,8 @@ export class HandAnimator implements MoveAnimator {
     }
 
     // Alınan taş, hamleyi yapanın tarafında tahtanın yanına götürülür.
-    const start = squareToWorld(step.square);
-    const out = new THREE.Vector3(start.x >= 0 ? SIDE_X : -SIDE_X, 0.9, side * 3);
+    // Beyaz kendi solunda (−x), siyah kendi solunda (+x) bırakır; masa saati her iki oyuncunun da sağındadır.
+    const out = new THREE.Vector3(-side * SIDE_X, 0.9, side * 2.5);
     return {
       done: false,
       phases: [

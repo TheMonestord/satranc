@@ -59,13 +59,20 @@ export function buildTable(masa: MasaTheme): THREE.Group {
   const body = new THREE.Group();
   body.name = 'masa-govde';
   const topMat = new THREE.MeshStandardMaterial({ color: masa.masaRengi, roughness: 0.6, metalness: 0.03 });
-  const top = new THREE.Mesh(new THREE.CylinderGeometry(8.4, 8.2, 0.5, 48), topMat);
+  const top = new THREE.Mesh(new THREE.CylinderGeometry(10.6, 10.4, 0.5, 64), topMat);
   top.position.y = -BOARD_THICKNESS - 0.012 - 0.25;
   top.receiveShadow = true;
   body.add(top);
-  const leg = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 2.6, 7, 24), topMat);
-  leg.position.y = top.position.y - 0.25 - 3.5;
+  // Ayak, oda zeminine (y=-14, masa yüksekliği ~75 cm) kadar iner.
+  const legLen = 13.2;
+  const leg = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 1.6, legLen, 24), topMat);
+  leg.position.y = top.position.y - 0.25 - legLen / 2;
+  leg.castShadow = true;
   body.add(leg);
+  const foot = new THREE.Mesh(new THREE.CylinderGeometry(3.2, 3.8, 0.6, 32), topMat);
+  foot.position.y = leg.position.y - legLen / 2 + 0.3;
+  foot.receiveShadow = true;
+  body.add(foot);
   group.add(body);
 
   return group;

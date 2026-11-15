@@ -5,6 +5,7 @@ import { confirmDialog } from './dialog';
 import { Hud, type HudAction } from './hud';
 import { t } from './i18n';
 import { askPromotion } from './promotionDialog';
+import { characterEventsForMove, characterEventsForState } from '../game/characterEvents';
 
 export type ViewKind = '2d' | '3d';
 
@@ -32,6 +33,9 @@ export class GameScreen {
   private shownFen = '';
   private disposed = false;
   private busy = false;
+  private prevState: GameState | null = null;
+  /** Konum hamle dışı yollarla (geri alma, yeni oyun) her değiştiğinde artar; iptal olan hamleye tepki verilmez. */
+  private positionEpoch = 0;
 
   constructor(
     private host: HTMLElement,
@@ -56,7 +60,9 @@ export class GameScreen {
     deps.gm.on('move', (ev) => this.onMove(ev));
     deps.gm.on('state', (s) => this.onState(s));
     deps.gm.on('clock', (c) => {
-      if (!this.disposed) this.hud.updateClock(c);
+      if (this.disposed) return;
+      this.hud.updateClock(c);
+      this.view.setClock?.(c);
     });
     this.onState(state);
   }
@@ -68,6 +74,7 @@ export class GameScreen {
     this.view = this.mountView(kind);
     this.hud.setView(kind);
     this.shownFen = '';
+    this.prevState = null;
     this.onState(this.deps.gm.state());
   }
 
@@ -103,7 +110,17 @@ export class GameScreen {
     this.selected = null;
     this.lastMove = [ev.from, ev.to];
     this.shownFen = ev.fenAfter;
-    void this.view.applyMove(ev, this.deps.gm.pieces());
+    const ai = this.aiColor();
+    const anim = this.view.applyMove(ev, this.deps.gm.pieces());
+    if (ai && this.view.characterEvent) {
+      const events = characterEventsForMove(ev, ai);
+      // Tepki, taş tahtaya konduktan sonra gelir.
+      const epoch = this.positionEpoch;
+      if (events.length) void anim.then(() => {
+        if (this.disposed || epoch !== this.positionEpoch) return;
+        for (const e of events) this.view.characterEvent?.(e);
+      });
+    }
   }
 
   private onState(s: GameState): void {
@@ -112,12 +129,25 @@ export class GameScreen {
     if (s.fen !== this.shownFen) {
       // Hamle olayı olmadan değişen konum: geri alma, yeni oyun, geri yükleme veya görünüm değişimi.
       this.view.setPosition(pieces);
+      this.positionEpoch++;
       this.shownFen = s.fen;
       this.selected = null;
       if (s.history.length === 0) this.lastMove = undefined;
     }
     this.hud.update(s);
     this.renderHighlights(s, pieces);
+    this.view.setClock?.(s.clock);
+    const ai = this.aiColor();
+    if (ai && this.view.characterEvent) {
+      for (const e of characterEventsForState(this.prevState, s, ai)) this.view.characterEvent(e);
+    }
+    this.prevState = s;
+  }
+
+  /** Bilgisayara karşı oyunda bilgisayarın rengi; iki kişilik oyunda null. */
+  private aiColor(): 'w' | 'b' | null {
+    const c = this.deps.gm.state().config;
+    return c.mode === 'ai' ? (c.playerColor === 'w' ? 'b' : 'w') : null;
   }
 
   private renderHighlights(s: GameState, pieces: PieceOnBoard[]): void {
@@ -129,6 +159,7 @@ export class GameScreen {
       lastMove: this.lastMove,
       check: king?.square,
     });
+    this.view.lookAtSquare?.(this.selected);
   }
 
   private async onSquareClick(sq: Square): Promise<void> {

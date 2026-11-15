@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Karakter Önizleme</title>
+    <style>
+      html, body { margin: 0; height: 100%; background: #0c0b0d; color: #ddd; font: 13px system-ui, sans-serif; overflow: hidden; }
+      canvas { display: block; }
+      #panel { position: fixed; top: 8px; left: 8px; display: flex; flex-wrap: wrap; gap: 4px; max-width: 760px; }
+      #panel button { background: #222a; color: #eee; border: 1px solid #555; border-radius: 4px; padding: 4px 8px; cursor: pointer; }
+      #panel button:hover { background: #444a; }
+      #help { position: fixed; bottom: 8px; left: 8px; opacity: 0.6; }
+      body.shot #panel, body.shot #help { display: none; }
+    </style>
+  </head>
+  <body>
+    <div id="panel"></div>
+    <div id="help">1-8: tepkiler · 0: düşünme bitti · R: rakip eli · P: oyuncu eli · C: kamera · L: dolgu ışığı</div>
+    <script type="module" src="/src/dev/characterPreview.ts"></script>
+  </body>
+</html>

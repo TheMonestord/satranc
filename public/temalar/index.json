@@ -1,5 +1,6 @@
 {
   "temalar": [
+    "ortamlar/sorgu-odasi",
     "ortamlar/klasik-oda",
     "ortamlar/gece-salonu",
     "ortamlar/gun-isigi",

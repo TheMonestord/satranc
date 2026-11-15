@@ -1,11 +1,17 @@
 import * as THREE from 'three';
 import type { Settings } from '../../game/storage';
 import type { OrtamTheme } from '../../themes/types';
+import { FLOOR_Y, buildRoom } from './room';
 
 export type Quality = Settings['quality'];
 
 /** Ortam: zemin ve ışıklar. Arka plan ve sis sahneye `applyBackground` ile uygulanır. */
 export function buildEnvironment(ortam: OrtamTheme, quality: Quality): THREE.Group {
+  if (ortam.oda) {
+    const room = buildRoom(ortam.oda, ortam, quality);
+    room.name = 'ortam';
+    return room;
+  }
   const group = new THREE.Group();
   group.name = 'ortam';
 
@@ -14,7 +20,7 @@ export function buildEnvironment(ortam: OrtamTheme, quality: Quality): THREE.Gro
     new THREE.MeshStandardMaterial({ color: ortam.zemin, roughness: 0.95, metalness: 0 }),
   );
   floor.rotation.x = -Math.PI / 2;
-  floor.position.y = -7.8;
+  floor.position.y = FLOOR_Y;
   floor.receiveShadow = true;
   group.add(floor);
 
@@ -47,5 +53,5 @@ export function buildEnvironment(ortam: OrtamTheme, quality: Quality): THREE.Gro
 
 export function applyBackground(scene: THREE.Scene, ortam: OrtamTheme): void {
   scene.background = new THREE.Color(ortam.arkaPlan);
-  scene.fog = new THREE.Fog(ortam.arkaPlan, 35, 95);
+  scene.fog = ortam.oda ? new THREE.Fog(ortam.arkaPlan, 40, 140) : new THREE.Fog(ortam.arkaPlan, 35, 95);
 }

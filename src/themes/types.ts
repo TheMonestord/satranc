@@ -1,5 +1,8 @@
 export type MusicMood = 'sakin' | 'gece' | 'gunduz';
 export const MUSIC_MOODS: MusicMood[] = ['sakin', 'gece', 'gunduz'];
+/** Kodla çizilen kapalı odalar. Ortam temasında `oda` verilmezse açık ortam çizilir. */
+export type RoomKind = 'sorgu';
+export const ROOM_KINDS: RoomKind[] = ['sorgu'];
 export type ThemeSlot = 'ortam' | 'masa' | 'taslar' | 'eller';
 export const THEME_SLOTS: ThemeSlot[] = ['ortam', 'masa', 'taslar', 'eller'];
 
@@ -20,6 +23,8 @@ export interface OrtamTheme extends ThemeBase {
   isikSiddeti: number;
   /** İsteğe bağlı müzik havası; verilmezse 'sakin'. */
   muzik?: MusicMood;
+  /** İsteğe bağlı kapalı oda; verilirse zemin ve ışıklar yerine bu oda çizilir. */
+  oda?: RoomKind;
 }
 
 export interface MasaTheme extends ThemeBase {

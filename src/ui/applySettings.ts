@@ -9,6 +9,7 @@ export interface SettingsTarget {
   setQuality(quality: Settings['quality']): void;
   setAnimation(animation: Settings['animation']): void;
   setMotion(motion: Settings['motion']): void;
+  setCamera(camera: Settings['camera']): void;
   setAudio(sound: boolean, music: boolean): void;
 }
 
@@ -28,4 +29,5 @@ export function applySettingsChange(prev: Settings, next: Settings, target: Sett
   if (prev.quality !== next.quality) target.setQuality(next.quality);
   if (prev.animation !== next.animation) target.setAnimation(next.animation);
   if (prev.motion !== next.motion) target.setMotion(next.motion);
+  if (prev.camera !== next.camera) target.setCamera(next.camera);
 }

@@ -8,6 +8,8 @@ export interface Settings {
   view: '3d' | '2d';
   /** Hareket modu: taşları el oynatır veya taşlar kendi yürür. */
   motion: 'hands' | 'walk';
+  /** 3D kamera: masada oturan oyuncunun gözü ya da kuşbakışı. */
+  camera: 'masa' | 'kus';
   sound: boolean;
   music: boolean;
   themes: { ortam: string; masa: string; taslar: string; eller: string };
@@ -19,9 +21,10 @@ export const DEFAULT_SETTINGS: Settings = {
   animation: 'normal',
   view: '3d',
   motion: 'hands',
+  camera: 'masa',
   sound: true,
   music: false,
-  themes: { ortam: 'klasik-oda', masa: 'ahsap', taslar: 'klasik', eller: 'sade' },
+  themes: { ortam: 'sorgu-odasi', masa: 'ahsap', taslar: 'klasik', eller: 'sade' },
 };
 
 const SETTINGS_KEY = 'satranc.ayarlar';
@@ -51,10 +54,12 @@ export function loadSettings(defaults: Settings = DEFAULT_SETTINGS): Settings {
     animation: oneOf(r.animation, ['normal', 'fast', 'off'] as const, defaults.animation),
     view: oneOf(r.view, ['3d', '2d'] as const, defaults.view),
     motion: oneOf(r.motion, ['hands', 'walk'] as const, defaults.motion),
+    camera: oneOf(r.camera, ['masa', 'kus'] as const, defaults.camera),
     sound: typeof r.sound === 'boolean' ? r.sound : defaults.sound,
     music: typeof r.music === 'boolean' ? r.music : defaults.music,
     themes: {
-      ortam: str(t.ortam, defaults.themes.ortam),
+      // Sürüm 3'ten önceki kayıtlarda kamera alanı yoktur: bu oyuncular yeni odayı bir kez görsün.
+      ortam: r.camera === undefined ? defaults.themes.ortam : str(t.ortam, defaults.themes.ortam),
       masa: str(t.masa, defaults.themes.masa),
       taslar: str(t.taslar, defaults.themes.taslar),
       eller: str(t.eller, defaults.themes.eller),
