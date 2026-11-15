@@ -10,7 +10,8 @@
     "preview": "vite preview --port 4173 --strictPort",
     "test": "vitest run",
     "e2e": "playwright test",
-    "postinstall": "node scripts/copy-engine.mjs"
+    "postinstall": "node scripts/copy-engine.mjs",
+    "varliklar": "node scripts/assets/hazirla.mjs"
   },
   "dependencies": {
     "chess.js": "^1.4.0",

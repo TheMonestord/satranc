@@ -53,5 +53,7 @@ export function buildEnvironment(ortam: OrtamTheme, quality: Quality): THREE.Gro
 
 export function applyBackground(scene: THREE.Scene, ortam: OrtamTheme): void {
   scene.background = new THREE.Color(ortam.arkaPlan);
-  scene.fog = ortam.oda ? new THREE.Fog(ortam.arkaPlan, 40, 140) : new THREE.Fog(ortam.arkaPlan, 35, 95);
+  // Parkta uzaklar sıcak bir pusla yumuşar; kapalı odada karanlık köşeler; açık ortamda eski mesafeler.
+  if (ortam.oda === 'park') scene.fog = new THREE.Fog(ortam.arkaPlan, 90, 340);
+  else scene.fog = ortam.oda ? new THREE.Fog(ortam.arkaPlan, 40, 140) : new THREE.Fog(ortam.arkaPlan, 35, 95);
 }

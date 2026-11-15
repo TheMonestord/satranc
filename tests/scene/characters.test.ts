@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { solveTwoBone, handBasis, pitchedForward, IKArm } from '../../src/scene/view3d/characters/rig';
 import {
   CHARACTERS,
+  DEFAULT_CHARACTER_ID,
   createCharacter,
   createPlayerArm,
   placeOpponent,
@@ -137,7 +138,7 @@ describe('karakter kaydı', () => {
 
   test('bilinmeyen kimlik varsayılan rakibi verir', () => {
     const ch = createCharacter('yok-boyle-biri');
-    expect(ch.id).toBe('deneyci');
+    expect(ch.id).toBe(DEFAULT_CHARACTER_ID);
     ch.dispose();
   });
 });

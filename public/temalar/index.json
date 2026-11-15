@@ -1,15 +1,18 @@
 {
   "temalar": [
+    "ortamlar/sonbahar-parki",
     "ortamlar/sorgu-odasi",
     "ortamlar/klasik-oda",
     "ortamlar/gece-salonu",
     "ortamlar/gun-isigi",
+    "masalar/park-masasi",
     "masalar/ahsap",
     "masalar/mermer",
     "masalar/gece-mavisi",
     "taslar/klasik",
     "taslar/buz-ates",
     "taslar/altin-gumus",
+    "taslar/cizgi-film",
     "eller/sade",
     "eller/eldiven"
   ]

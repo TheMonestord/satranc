@@ -26,7 +26,7 @@ const FOV = 38;
 export type CameraMode = 'masa' | 'kus';
 /** Masa başı görünümde oyuncunun gözü (beyaz taraftan) ve baktığı nokta. */
 export const EYE = new THREE.Vector3(0, 12.5, 11.5);
-export const EYE_TARGET = new THREE.Vector3(0, 1.6, -3);
+export const EYE_TARGET = new THREE.Vector3(0, 3.2, -3);
 const EYE_FOV = 50;
 const LOOK_YAW_MAX = THREE.MathUtils.degToRad(40);
 const LOOK_PITCH_MIN = THREE.MathUtils.degToRad(-25);
@@ -43,6 +43,7 @@ function disposeObject(obj: THREE.Object3D): void {
   obj.traverse((o) => {
     const mesh = o as THREE.Mesh;
     if (!mesh.isMesh) return;
+    if ((mesh as THREE.InstancedMesh).isInstancedMesh) (mesh as THREE.InstancedMesh).dispose();
     mesh.geometry?.dispose();
     const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
     for (const m of mats) {
@@ -61,7 +62,7 @@ const IDLE_FPS = { low: 20, medium: 30, high: 40 } as const;
 export class Scene3D implements BoardView, MoveAnimatorHost {
   readonly scene = new THREE.Scene();
   private renderer: THREE.WebGLRenderer | null = null;
-  private camera = new THREE.PerspectiveCamera(FOV, 1, 0.5, 200);
+  private camera = new THREE.PerspectiveCamera(FOV, 1, 0.5, 900);
   private controls: OrbitControls | null = null;
   private host: HTMLElement | null = null;
   private resizeObserver: ResizeObserver | null = null;

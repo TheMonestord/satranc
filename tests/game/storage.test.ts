@@ -60,3 +60,23 @@ describe('oyun kaydı', () => {
     expect(await loadGame()).toBeNull();
   });
 });
+
+describe('tema kuşağı geçişi', () => {
+  beforeEach(() => localStorage.clear());
+
+  test('eski kuşaktan kayıt yeni varsayılan temalara bir kez geçer, diğer ayarlar korunur', () => {
+    localStorage.setItem(
+      'satranc.ayarlar',
+      JSON.stringify({ ...DEFAULT_SETTINGS, quality: 'high', temaSurumu: 1, themes: { ortam: 'sorgu-odasi', masa: 'ahsap', taslar: 'klasik', eller: 'sade' } }),
+    );
+    const s = loadSettings();
+    expect(s.themes).toEqual(DEFAULT_SETTINGS.themes);
+    expect(s.quality).toBe('high');
+    expect(s.temaSurumu).toBe(DEFAULT_SETTINGS.temaSurumu);
+  });
+
+  test('güncel kuşakta oyuncunun seçtiği tema korunur', () => {
+    localStorage.setItem('satranc.ayarlar', JSON.stringify({ ...DEFAULT_SETTINGS, themes: { ...DEFAULT_SETTINGS.themes, ortam: 'sorgu-odasi' } }));
+    expect(loadSettings().themes.ortam).toBe('sorgu-odasi');
+  });
+});

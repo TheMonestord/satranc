@@ -1,8 +1,8 @@
 export type MusicMood = 'sakin' | 'gece' | 'gunduz';
 export const MUSIC_MOODS: MusicMood[] = ['sakin', 'gece', 'gunduz'];
 /** Kodla çizilen kapalı odalar. Ortam temasında `oda` verilmezse açık ortam çizilir. */
-export type RoomKind = 'sorgu';
-export const ROOM_KINDS: RoomKind[] = ['sorgu'];
+export type RoomKind = 'sorgu' | 'park';
+export const ROOM_KINDS: RoomKind[] = ['sorgu', 'park'];
 export type ThemeSlot = 'ortam' | 'masa' | 'taslar' | 'eller';
 export const THEME_SLOTS: ThemeSlot[] = ['ortam', 'masa', 'taslar', 'eller'];
 

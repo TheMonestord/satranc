@@ -301,4 +301,33 @@ describe('Scene3D + HandAnimator', () => {
     await scene.applyMove(play(core, 'g1f3'), core.pieces());
     expect(scene.pieceAt('f3')?.userData.piece).toBe('n');
   });
+
+  test('karakter eli hazır değilse taşı görünür bağımsız el taşır; hazırsa karakterin eli', async () => {
+    const core = new ChessCore();
+    const { host, scene } = fakeHost(core);
+    const { clock, advance } = fakeClock();
+    const charHand = { root: new THREE.Group(), setGrip: vi.fn() };
+    let ready = false;
+    const setBusy = vi.fn();
+    const slot = { hand: charHand, rest: () => new THREE.Vector3(1, 2, 3), setBusy, available: () => ready };
+    const anim = new HandAnimator(host, eller, clock, { w: slot });
+    const before = scene.children.length;
+
+    void anim.play(play(core, 'e2e4'), 1);
+    expect(scene.children.length).toBe(before + 1); // bağımsız el eklendi
+    expect(setBusy).not.toHaveBeenCalled();
+    advance(NORMAL_MOVE_MS + 100);
+    await flush();
+
+    ready = true;
+    void anim.play(play(core, 'e7e5'), 1); // siyah: yuva yok, bağımsız el
+    advance(NORMAL_MOVE_MS + 100);
+    await flush();
+    void anim.play(play(core, 'g1f3'), 1);
+    expect(setBusy).toHaveBeenCalledWith(true);
+    expect(scene.children.length).toBe(before); // karakter eli sahneye ayrıca eklenmez
+    advance(NORMAL_MOVE_MS + 100);
+    await flush();
+    expect(setBusy).toHaveBeenLastCalledWith(false);
+  });
 });

@@ -13,6 +13,11 @@ export interface Settings {
   sound: boolean;
   music: boolean;
   themes: { ortam: string; masa: string; taslar: string; eller: string };
+  /**
+   * Varsayılan temaların hangi kuşağına göre kaydedildiği. Yeni bir görünüm kuşağı gelince eski kayıtlar
+   * bir kez yeni varsayılan temalara geçer; oyuncu sonra istediği temayı yine seçebilir.
+   */
+  temaSurumu: number;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -24,8 +29,12 @@ export const DEFAULT_SETTINGS: Settings = {
   camera: 'masa',
   sound: true,
   music: false,
-  themes: { ortam: 'sorgu-odasi', masa: 'ahsap', taslar: 'klasik', eller: 'sade' },
+  themes: { ortam: 'sonbahar-parki', masa: 'park-masasi', taslar: 'cizgi-film', eller: 'sade' },
+  temaSurumu: 2,
 };
+
+/** Varsayılan temaların güncel kuşağı: 1 Sorgu Odası, 2 Sonbahar Parkı. */
+export const THEME_REVISION = 2;
 
 const SETTINGS_KEY = 'satranc.ayarlar';
 
@@ -48,6 +57,7 @@ export function loadSettings(defaults: Settings = DEFAULT_SETTINGS): Settings {
   if (!raw || typeof raw !== 'object') return structuredClone(defaults);
   const r = raw as Record<string, unknown>;
   const t = (r.themes && typeof r.themes === 'object' ? r.themes : {}) as Record<string, unknown>;
+  const stale = typeof r.temaSurumu !== 'number' || r.temaSurumu < THEME_REVISION;
   return {
     language: oneOf(r.language, ['tr', 'en'] as const, defaults.language),
     quality: oneOf(r.quality, ['low', 'medium', 'high'] as const, defaults.quality),
@@ -57,13 +67,16 @@ export function loadSettings(defaults: Settings = DEFAULT_SETTINGS): Settings {
     camera: oneOf(r.camera, ['masa', 'kus'] as const, defaults.camera),
     sound: typeof r.sound === 'boolean' ? r.sound : defaults.sound,
     music: typeof r.music === 'boolean' ? r.music : defaults.music,
-    themes: {
-      // Sürüm 3'ten önceki kayıtlarda kamera alanı yoktur: bu oyuncular yeni odayı bir kez görsün.
-      ortam: r.camera === undefined ? defaults.themes.ortam : str(t.ortam, defaults.themes.ortam),
-      masa: str(t.masa, defaults.themes.masa),
-      taslar: str(t.taslar, defaults.themes.taslar),
-      eller: str(t.eller, defaults.themes.eller),
-    },
+    // Eski kuşaktan kalan kayıtlar yeni görünümü bir kez görsün.
+    themes: stale
+      ? { ...defaults.themes }
+      : {
+          ortam: str(t.ortam, defaults.themes.ortam),
+          masa: str(t.masa, defaults.themes.masa),
+          taslar: str(t.taslar, defaults.themes.taslar),
+          eller: str(t.eller, defaults.themes.eller),
+        },
+    temaSurumu: THEME_REVISION,
   };
 }
 

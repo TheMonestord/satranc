@@ -1,0 +1,9 @@
+{
+  "id": "cizgi-film",
+  "tur": "taslar",
+  "ad": { "tr": "Ahşap Park Takımı", "en": "Park Wooden Set" },
+  "beyaz": "#efe3c8",
+  "siyah": "#3a2418",
+  "parlaklik": 0.7,
+  "model": "taslar.glb"
+}

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { OrtamTheme, RoomKind } from '../../themes/types';
 import type { Quality } from './environment';
+import { buildAutumnPark } from './park';
 
 /**
  * Kodla çizilen kapalı odalar. Ölçek: 1 birim ≈ 5,5 cm; tahtanın üstü y=0, oda zemini y=FLOOR_Y.
@@ -18,13 +19,15 @@ export function buildRoom(kind: RoomKind, ortam: OrtamTheme, quality: Quality): 
   switch (kind) {
     case 'sorgu':
       return buildInterrogationRoom(ortam, quality);
+    case 'park':
+      return buildAutumnPark(ortam, quality);
   }
 }
 
 // ---------- Dokular ----------
 
 /** Basit, tekrarlanabilir rastgele sayı üreteci; oda her açılışta aynı görünür. */
-function rng(seed: number): () => number {
+export function rng(seed: number): () => number {
   let s = seed >>> 0;
   return () => {
     s = (s * 1664525 + 1013904223) >>> 0;
@@ -32,7 +35,7 @@ function rng(seed: number): () => number {
   };
 }
 
-function canvas(w: number, h: number): CanvasRenderingContext2D | null {
+export function canvas(w: number, h: number): CanvasRenderingContext2D | null {
   if (typeof document === 'undefined') return null;
   try {
     const c = document.createElement('canvas');
@@ -44,7 +47,7 @@ function canvas(w: number, h: number): CanvasRenderingContext2D | null {
   }
 }
 
-function texture(ctx: CanvasRenderingContext2D | null, repeat: [number, number]): THREE.Texture | null {
+export function texture(ctx: CanvasRenderingContext2D | null, repeat: [number, number]): THREE.Texture | null {
   if (!ctx) return null;
   const tex = new THREE.CanvasTexture(ctx.canvas);
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
@@ -160,17 +163,17 @@ function tileTexture(seed: number, repeat: [number, number]): THREE.Texture | nu
 
 // ---------- Sorgu Odası ----------
 
-function mat(color: string, opts: Partial<THREE.MeshStandardMaterialParameters> = {}): THREE.MeshStandardMaterial {
+export function mat(color: string, opts: Partial<THREE.MeshStandardMaterialParameters> = {}): THREE.MeshStandardMaterial {
   return new THREE.MeshStandardMaterial({ color, roughness: 0.85, metalness: 0, ...opts });
 }
 
-function box(w: number, h: number, d: number, material: THREE.Material, shadows = true): THREE.Mesh {
+export function box(w: number, h: number, d: number, material: THREE.Material, shadows = true): THREE.Mesh {
   const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material);
   m.castShadow = shadows;
   m.receiveShadow = true;
   return m;
 }
-function cyl(rTop: number, rBottom: number, h: number, material: THREE.Material, seg = 16): THREE.Mesh {
+export function cyl(rTop: number, rBottom: number, h: number, material: THREE.Material, seg = 16): THREE.Mesh {
   const m = new THREE.Mesh(new THREE.CylinderGeometry(rTop, rBottom, h, seg), material);
   m.castShadow = true;
   m.receiveShadow = true;

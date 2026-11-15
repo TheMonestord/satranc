@@ -46,6 +46,8 @@ export interface HandSlot {
   hand: Hand;
   rest(): THREE.Vector3;
   setBusy(busy: boolean): void;
+  /** Karakter henüz hazır değilse (model yükleniyor ya da yüklenemedi) false; o zaman bağımsız el kullanılır. */
+  available?(): boolean;
 }
 
 interface Phase {
@@ -101,7 +103,8 @@ export class HandAnimator implements MoveAnimator {
     this.finishNow();
     return new Promise<void>((resolve) => {
       const side = ev.color === 'w' ? 1 : -1;
-      this.slot = this.slots[ev.color] ?? null;
+      const slot = this.slots[ev.color];
+      this.slot = slot && (slot.available?.() ?? true) ? slot : null;
       let rest: THREE.Vector3;
       if (this.slot) {
         this.hand = this.slot.hand;

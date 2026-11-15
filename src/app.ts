@@ -6,7 +6,7 @@ import type { BoardView } from './scene/view';
 import { View2D } from './scene/view2d';
 import { Scene3D } from './scene/view3d/scene3d';
 import { HandAnimator, type HandSlot } from './scene/animators/handAnimator';
-import { DEFAULT_CHARACTER_ID, createCharacter, createPlayerArm, type Character } from './scene/view3d/characters';
+import { DEFAULT_CHARACTER_ID, PLAYER_BODY_ID, createCharacter, createPlayerBody, type Character } from './scene/view3d/characters';
 import type { MoveAnimator } from './scene/animators/types';
 import { WalkAnimator } from './scene/animators/walkAnimator';
 import { ThemeRegistry } from './themes/registry';
@@ -41,6 +41,8 @@ export class App {
     (globalThis as { __satranc?: unknown }).__satranc = {
       squareToClient: (sq: string, height = 0) =>
         this.view instanceof Scene3D ? this.view.squareToClient(sq, height) : null,
+      // Geliştirme ve uçtan uca testler için: etkin görünüm (karakterlere erişim).
+      view: () => this.view,
     };
     this.settings = loadSettings({ ...DEFAULT_SETTINGS, language: detectLang() });
     setLang(this.settings.language);
@@ -219,10 +221,10 @@ export class App {
   private setupActors(scene: Scene3D): void {
     scene.setAnimator(null);
     const cfg = this.gm.state().config;
-    const eller = this.registry.resolve(this.settings.themes).eller;
     const opponent = cfg.mode === 'ai' ? createCharacter(DEFAULT_CHARACTER_ID) : null;
+    // Oyuncunun kolu: GLB karakterlerden birinin gövdesi (kodla yapılan createPlayerArm da kullanılabilir).
     const arm =
-      cfg.mode === 'ai' && this.settings.camera === 'masa' && this.settings.motion === 'hands' ? createPlayerArm(eller) : null;
+      cfg.mode === 'ai' && this.settings.camera === 'masa' && this.settings.motion === 'hands' ? createPlayerBody(PLAYER_BODY_ID) : null;
     scene.setPlayerColor(cfg.mode === 'ai' ? cfg.playerColor : 'w');
     scene.setCharacters(opponent, arm);
     scene.setAnimator(this.createAnimator(scene, opponent, arm));
@@ -234,6 +236,8 @@ export class App {
       hand: c.hand,
       rest: () => c.restPoint(),
       setBusy: (b) => c.setHandBusy(b),
+      // Model yüklenene kadar (ya da yüklenemezse) taşı görünür bağımsız el taşır.
+      available: () => (c as Character & { ready?: boolean }).ready ?? true,
     });
     const player = this.gm.state().config.playerColor;
     const slots: Partial<Record<'w' | 'b', HandSlot>> = {};

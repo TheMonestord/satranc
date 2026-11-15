@@ -1,0 +1,4 @@
+# Hattın yerel çıktıları (raporlar, önizleme görüntüleri) ve isteğe bağlı kaynak klasörü
+rapor-*.json
+onizleme/
+kaynak/

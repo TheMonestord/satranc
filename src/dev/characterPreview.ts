@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { FILES, type Square } from '../core/types';
 import { buildTable, squareToWorld } from '../scene/view3d/table';
 import { buildPiece, PIECE_HEIGHTS } from '../scene/view3d/pieces';
-import { createCharacter, createPlayerArm, placeOpponent, PLAYER_CAMERA, type CharacterEvent } from '../scene/view3d/characters';
+import { createCharacter, createPlayerArm, createPlayerBody, placeOpponent, PLAYER_CAMERA, type CharacterEvent } from '../scene/view3d/characters';
 import type { Character } from '../scene/view3d/characters/types';
 import type { MasaTheme, TaslarTheme } from '../themes/types';
 
@@ -122,7 +122,12 @@ const opp = createCharacter(params.get('karakter') ?? 'deneyci');
 placeOpponent(opp);
 scene.add(opp.root, opp.hand.root);
 opp.hand.root.position.copy(opp.restPoint());
-const player = createPlayerArm({ id: 'sade', tur: 'eller', ad: { tr: '', en: '' }, baseUrl: '', renk: '#d9a47e' });
+const playerKind = params.get('oyuncu') ?? 'patron';
+const player =
+  playerKind === 'kol'
+    ? createPlayerArm({ id: 'sade', tur: 'eller', ad: { tr: '', en: '' }, baseUrl: '', renk: '#d9a47e' })
+    : createPlayerBody(playerKind);
+player.configure(PLAYER_CAMERA.position, new THREE.Vector3(0, 1.6, -3), PLAYER_CAMERA.fov, 16 / 9);
 scene.add(player.root, player.hand.root);
 player.hand.root.position.copy(player.restPoint());
 for (const c of [opp, player]) {
@@ -134,7 +139,11 @@ for (const c of [opp, player]) {
 // ---- Kamera ----
 const camera = new THREE.PerspectiveCamera(PLAYER_CAMERA.fov, 16 / 9, 0.3, 200);
 const CAMERAS: Record<string, { pos: THREE.Vector3; target: THREE.Vector3; fov: number }> = {
-  fp: { pos: PLAYER_CAMERA.position.clone(), target: PLAYER_CAMERA.target.clone(), fov: PLAYER_CAMERA.fov },
+  fp: { pos: PLAYER_CAMERA.position.clone(), target: new THREE.Vector3(0, 1.6, -3), fov: PLAYER_CAMERA.fov },
+  phand: { pos: new THREE.Vector3(5.5, 3.5, 6.5), target: new THREE.Vector3(0.5, 1.2, 2.5), fov: 32 },
+  phand2: { pos: new THREE.Vector3(-4.5, 2.8, -1.0), target: new THREE.Vector3(0.5, 1.2, 2.5), fov: 32 },
+  ohand: { pos: new THREE.Vector3(-5.5, 3.5, 1.5), target: new THREE.Vector3(-0.5, 1.4, -2.5), fov: 32 },
+  pside: { pos: new THREE.Vector3(24, 12, 9), target: new THREE.Vector3(3, 4, 4), fov: 40 },
   'fp-up': { pos: PLAYER_CAMERA.position.clone(), target: new THREE.Vector3(0, 5, -8), fov: PLAYER_CAMERA.fov },
   side: { pos: new THREE.Vector3(26, 7, -3), target: new THREE.Vector3(0, 3, -7), fov: 40 },
   front: { pos: new THREE.Vector3(0, 8.5, 3), target: new THREE.Vector3(0, 6.5, -6.5), fov: 45 },
@@ -301,8 +310,16 @@ const api = {
   react: (ev: CharacterEvent) => opp.react(ev),
   reachTo: (who: 'rakip' | 'oyuncu', a?: Square, b?: Square) => reachTo(who === 'rakip' ? opp : player, a, b),
   holdAt: (who: 'rakip' | 'oyuncu', sq: Square, grip?: number) => holdAt(who === 'rakip' ? opp : player, sq, grip),
+  holdPoint(who: 'rakip' | 'oyuncu', x: number, y: number, z: number, grip = 0.6) {
+    reach = null;
+    const c = who === 'rakip' ? opp : player;
+    c.setHandBusy(true);
+    c.hand.root.position.set(x, y, z);
+    c.hand.setGrip(grip);
+  },
   release: (who: 'rakip' | 'oyuncu') => release(who === 'rakip' ? opp : player),
   fill: (on: boolean) => (fillLights.visible = on),
+  ready: () => (opp as { ready?: boolean }).ready !== false && (player as { ready?: boolean }).ready !== false,
   info: () => ({ triangles: renderer.info.render.triangles, calls: renderer.info.render.calls }),
   triangles(who: 'rakip' | 'oyuncu') {
     const c = who === 'rakip' ? opp : player;

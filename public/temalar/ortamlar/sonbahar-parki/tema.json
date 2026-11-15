@@ -1,0 +1,14 @@
+{
+  "id": "sonbahar-parki",
+  "tur": "ortam",
+  "ad": {
+    "tr": "Sonbahar Parkı",
+    "en": "Autumn Park"
+  },
+  "arkaPlan": "#f0cf98",
+  "zemin": "#6f8f3c",
+  "isikRengi": "#ffc98a",
+  "isikSiddeti": 3.0,
+  "muzik": "gunduz",
+  "oda": "park"
+}
